@@ -15,8 +15,17 @@ from db.conn import get_pool
 log = logging.getLogger("querylog")
 
 
+def _compact_hits(hits, keep_text: bool) -> list:
+    """Chunk text is reconstructible from chunk_id (chunk_text view); eval runs write thousands of rows,
+    so only API/smoke runs keep the text inline (Query Inspector convenience)."""
+    if keep_text or not hits:
+        return hits or []
+    return [{k: v for k, v in h.items() if k not in ("text", "context_text")} for h in hits]
+
+
 def write_query_log(row: dict) -> str | None:
     qid = row.get("id") or str(uuid.uuid4())
+    retrieved = _compact_hits(row.get("retrieved"), keep_text=row.get("source", "api") != "eval")
     try:
         with get_pool().connection() as conn, conn.cursor() as cur:
             cur.execute(
@@ -24,7 +33,7 @@ def write_query_log(row: dict) -> str | None:
                                            metrics, latency_ms, tokens, trace_provider, trace_id, trace_url, error)
                    values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                 (qid, row.get("source", "api"), row["question"], row.get("qa_id"),
-                 json.dumps(row.get("config")), json.dumps(row.get("stages")), json.dumps(row.get("retrieved")),
+                 json.dumps(row.get("config")), json.dumps(row.get("stages")), json.dumps(retrieved),
                  row.get("answer"), json.dumps(row.get("citations")), json.dumps(row.get("metrics")),
                  row.get("latency_ms"), json.dumps(row.get("tokens")), row.get("trace_provider"),
                  row.get("trace_id"), row.get("trace_url"), row.get("error")))

@@ -31,8 +31,10 @@ from pipeline.embedder import Embedder  # noqa: E402
 from pipeline.logging_setup import get_logger, setup_logging  # noqa: E402
 
 
-# Free-tier budget (500 MB): HNSW on the four smaller sets; `sentence` (~240k chunks) is exact-scanned.
-NO_INDEX = {"sentence"}
+# Free-tier budget (500 MB): HNSW on passage / fixed / recursive (~130k chunks, ~140 MB of index).
+# `sentence` (133k chunks) and `semantic` (40k) are exact-scanned — at these sizes an exact halfvec
+# scan is 50-200 ms, and the two indexes would push the database past the free-tier limit.
+NO_INDEX = {"sentence", "semantic"}
 
 
 def create_hnsw(conn, name: str, log) -> None:

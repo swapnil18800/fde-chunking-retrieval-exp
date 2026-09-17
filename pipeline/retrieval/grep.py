@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 import math
 import re
+from functools import lru_cache
 
 from db.conn import get_pool
 from pipeline.nlp import load_sci_nlp
@@ -57,33 +58,47 @@ class GrepRetriever(Retriever):
     def __init__(self, passage_candidates: int = 50):
         self.passage_candidates = passage_candidates
 
-    def retrieve(self, query: str, strategy: str, k: int) -> list[Hit]:
+    @staticmethod
+    @lru_cache(maxsize=2048)
+    def _score_passages(query: str, passage_candidates: int) -> tuple[tuple[str, ...], tuple, dict]:
+        """Strategy-independent part (terms → passage scores). Cached so the eval matrix pays the
+        passage scan once per question, not once per chunking strategy."""
         terms = extract_terms(query)
         if not terms:
-            return []
+            return (), (), {}
         with get_pool().connection() as conn, conn.cursor() as cur:
             cur.execute("select count(*) n from passages")
             n_total = cur.fetchone()["n"]
-            # one scan per term: passage ids that contain it (word boundary, case-insensitive)
-            weights, matches = {}, {}
-            for t in terms:
-                pat = r"\m" + re.escape(t) + r"\M"
-                cur.execute("select id from passages where text ~* %s", (pat,))
-                ids = [r["id"] for r in cur.fetchall()]
-                if not ids:
-                    continue
-                weights[t] = math.log(n_total / len(ids))
-                matches[t] = set(ids)
-            if not matches:
-                return []
-            score: dict[int, float] = {}
-            hit_terms: dict[int, list[str]] = {}
-            for t, ids in matches.items():
-                for pid in ids:
-                    score[pid] = score.get(pid, 0.0) + weights[t]
-                    hit_terms.setdefault(pid, []).append(t)
-            top = sorted(score.items(), key=lambda kv: -kv[1])[: self.passage_candidates]
-            pids = [pid for pid, _ in top]
+            # ONE scan: passages containing any term (word-boundary, case-insensitive); per-term
+            # matching + df happen in Python over the (much smaller) matched set.
+            alt = r"\m(" + "|".join(re.escape(t) for t in terms) + r")\M"
+            cur.execute("select id, text from passages where text ~* %s", (alt,))
+            rows = cur.fetchall()
+        pats = {t: re.compile(r"\b" + re.escape(t) + r"\b", re.I) for t in terms}
+        matches: dict[str, set[int]] = {t: set() for t in terms}
+        for r in rows:
+            for t, pat in pats.items():
+                if pat.search(r["text"]):
+                    matches[t].add(r["id"])
+        matches = {t: ids for t, ids in matches.items() if ids}
+        if not matches:
+            return tuple(terms), (), {}
+        weights = {t: math.log(n_total / len(ids)) for t, ids in matches.items()}
+        score: dict[int, float] = {}
+        hit_terms: dict[int, list[str]] = {}
+        for t, ids in matches.items():
+            for pid in ids:
+                score[pid] = score.get(pid, 0.0) + weights[t]
+                hit_terms.setdefault(pid, []).append(t)
+        top = tuple(sorted(score.items(), key=lambda kv: -kv[1])[:passage_candidates])
+        return tuple(terms), top, {pid: hit_terms[pid] for pid, _ in top}
+
+    def retrieve(self, query: str, strategy: str, k: int) -> list[Hit]:
+        terms, top, hit_terms = self._score_passages(query, self.passage_candidates)
+        if not top:
+            return []
+        pids = [pid for pid, _ in top]
+        with get_pool().connection() as conn, conn.cursor() as cur:
             # best chunk per passage = the one containing the most matched terms (ties → earlier chunk)
             cur.execute("select id, passage_id, chunk_index, char_start, char_end, text from chunk_text "
                         "where strategy = %s and passage_id = any(%s)", (strategy, pids))
@@ -107,5 +122,5 @@ class GrepRetriever(Retriever):
                 break
         log.debug("[grep] terms=%s -> %d hits", terms, len(hits))
         for h in hits:
-            h.meta["query_terms"] = terms
+            h.meta["query_terms"] = list(terms)
         return hits

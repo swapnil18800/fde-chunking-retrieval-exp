@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 import math
 from collections import Counter
+from functools import lru_cache
 
 import numpy as np
 
@@ -53,16 +54,18 @@ class KGRetriever(Retriever):
                 found[r["id"]] = r
         return list(found.values())
 
-    def retrieve(self, query: str, strategy: str, k: int) -> list[Hit]:
+    @lru_cache(maxsize=2048)
+    def _score_passages(self, query: str) -> tuple[tuple, dict, tuple[str, ...], int]:
+        """Strategy-independent graph walk (cached per question): returns (top (pid, score), paths, seed names, n_seed_passages)."""
         terms = extract_terms(query)
         if not terms:
-            return []
+            return (), {}, (), 0
         with get_pool().connection() as conn, conn.cursor() as cur:
             cur.execute("select count(*) n from passages")
             n_total = cur.fetchone()["n"]
             seeds = self._match_entities(cur, terms)
             if not seeds:
-                return []
+                return (), {}, (), 0
             score: dict[int, float] = {}
             path: dict[int, list[str]] = {}
             for e in seeds:
@@ -88,8 +91,15 @@ class KGRetriever(Retriever):
                         for pid in e["passage_ids"]:
                             score[pid] = score.get(pid, 0.0) + w
                             path.setdefault(pid, []).append(f"~{e['name']}")
-            top = sorted(score.items(), key=lambda kv: -kv[1])[: self.passage_candidates]
-            pids = [pid for pid, _ in top]
+        top = tuple(sorted(score.items(), key=lambda kv: -kv[1])[: self.passage_candidates])
+        return top, {pid: sorted(set(path[pid]))[:8] for pid, _ in top}, tuple(e["name"] for e in seeds)[:10], n_seed_passages
+
+    def retrieve(self, query: str, strategy: str, k: int) -> list[Hit]:
+        top, path, seed_names, n_seed_passages = self._score_passages(query)
+        if not top:
+            return []
+        pids = [pid for pid, _ in top]
+        with get_pool().connection() as conn, conn.cursor() as cur:
             cur.execute("select id, passage_id, chunk_index, char_start, char_end, embedding from chunks "
                         "where strategy = %s and passage_id = any(%s)", (strategy, pids))
             by_pid: dict[int, list[dict]] = {}
@@ -103,10 +113,10 @@ class KGRetriever(Retriever):
                 continue
             best = max(chunks, key=lambda c: float(np.dot(_vec(c["embedding"]), qv)))
             hits.append(Hit(best["id"], pid, sc, len(hits) + 1, self.name, best["chunk_index"], best["char_start"],
-                            best["char_end"], meta={"entities": sorted(set(path[pid]))[:8]}))
+                            best["char_end"], meta={"entities": path[pid]}))
             if len(hits) >= k:
                 break
-        log.debug("[kg] terms=%s seeds=%d seed_passages=%d -> %d hits", terms, len(seeds), n_seed_passages, len(hits))
+        log.debug("[kg] seeds=%s seed_passages=%d -> %d hits", seed_names, n_seed_passages, len(hits))
         for h in hits:
-            h.meta["seed_entities"] = [e["name"] for e in seeds][:10]
+            h.meta["seed_entities"] = list(seed_names)
         return hits
