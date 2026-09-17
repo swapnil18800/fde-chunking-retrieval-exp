@@ -27,7 +27,7 @@ class DenseRetriever(Retriever):
     def retrieve_vec(self, qv: np.ndarray, strategy: str, k: int) -> list[Hit]:
         lit = _lit(qv)
         with get_pool().connection() as conn, conn.cursor() as cur:
-            cur.execute("set local hnsw.ef_search = %s", (max(64, 2 * k),))
+            cur.execute(f"set local hnsw.ef_search = {int(max(64, 2 * k))}")  # SET takes no bind params
             cur.execute(
                 """select id, passage_id, chunk_index, char_start, char_end,
                           1 - (embedding <=> %s::halfvec) as score

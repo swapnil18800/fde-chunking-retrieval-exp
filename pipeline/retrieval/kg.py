@@ -25,6 +25,11 @@ from pipeline.retrieval.grep import extract_terms
 log = logging.getLogger("retrieve.kg")
 
 
+def _vec(v) -> np.ndarray:
+    """pgvector returns HalfVector objects; numpy wants floats."""
+    return v.to_numpy().astype(np.float32) if hasattr(v, "to_numpy") else np.asarray(v, dtype=np.float32)
+
+
 class KGRetriever(Retriever):
     name = "kg"
 
@@ -96,7 +101,7 @@ class KGRetriever(Retriever):
             chunks = by_pid.get(pid)
             if not chunks:
                 continue
-            best = max(chunks, key=lambda c: float(np.dot(np.asarray(c["embedding"], dtype=np.float32), qv)))
+            best = max(chunks, key=lambda c: float(np.dot(_vec(c["embedding"]), qv)))
             hits.append(Hit(best["id"], pid, sc, len(hits) + 1, self.name, best["chunk_index"], best["char_start"],
                             best["char_end"], meta={"entities": sorted(set(path[pid]))[:8]}))
             if len(hits) >= k:

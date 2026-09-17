@@ -69,5 +69,6 @@ def chunks_for_passages(strategy: str, passage_ids: list[int], with_embeddings: 
         rows = cur.fetchall()
     if with_embeddings:
         for r in rows:
-            r["embedding"] = np.asarray(r["embedding"], dtype=np.float32)
+            v = r["embedding"]
+            r["embedding"] = v.to_numpy().astype(np.float32) if hasattr(v, "to_numpy") else np.asarray(v, dtype=np.float32)
     return rows

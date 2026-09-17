@@ -20,6 +20,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import numpy as np  # noqa: E402
+from psycopg import sql  # noqa: E402
 from rich.progress import Progress  # noqa: E402
 
 from config import get_settings  # noqa: E402
@@ -38,9 +39,15 @@ def create_hnsw(conn, name: str, log) -> None:
     idx = f"chunks_hnsw_{name}"
     t0 = time.time()
     with conn.cursor() as cur:
-        cur.execute("set maintenance_work_mem = '256MB'")
-        cur.execute(f"""create index if not exists {idx} on chunks using hnsw (embedding halfvec_cosine_ops)
-                        with (m = 16, ef_construction = 96) where strategy = %s""", (name,))
+        # Supabase Nano has ~256 MB shared memory: keep maintenance memory modest and avoid parallel
+        # index workers (each allocates its own shared segment → "could not resize shared memory segment").
+        cur.execute("set maintenance_work_mem = '64MB'")
+        cur.execute("set max_parallel_maintenance_workers = 0")
+        cur.execute("set statement_timeout = '60min'")
+        # DDL cannot take bind parameters → inline the strategy name as a SQL literal
+        cur.execute(sql.SQL("""create index if not exists {} on chunks using hnsw (embedding halfvec_cosine_ops)
+                               with (m = 16, ef_construction = 96) where strategy = {}""")
+                    .format(sql.Identifier(idx), sql.Literal(name)))
         cur.execute("select pg_size_pretty(pg_relation_size(%s)) as size", (idx,))
         size = cur.fetchone()["size"]
     conn.commit()
@@ -118,6 +125,7 @@ def main() -> None:
     ap.add_argument("--limit", type=int, default=None, help="only first N passages (dev)")
     ap.add_argument("--block", type=int, default=512, help="passages per embed/COPY block")
     ap.add_argument("--no-index", action="store_true", help="skip HNSW creation (e.g. for --limit dev runs)")
+    ap.add_argument("--index-only", action="store_true", help="only (re)create HNSW indexes for the given strategies")
     args = ap.parse_args()
     names = DEFAULT_STRATEGIES if args.all else args.strategies
     if not names:
@@ -125,6 +133,12 @@ def main() -> None:
     s = get_settings()
     setup_logging(s.log_level, s.log_dir, "ingest")
     log = get_logger("ingest.chunks")
+    if args.index_only:
+        with connect() as conn:
+            for name in names:
+                if name not in NO_INDEX:
+                    create_hnsw(conn, name, log)
+        return
     embedder = Embedder()
     with connect() as conn:
         with conn.cursor() as cur:
