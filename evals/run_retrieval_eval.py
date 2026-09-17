@@ -22,13 +22,25 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+# --trace must be applied before pipeline.graph is imported (it initialises tracing at import time)
+if "--trace" in sys.argv:
+    import os
+
+    os.environ["TRACING_PROVIDER"] = sys.argv[sys.argv.index("--trace") + 1]
+elif "--smoke" not in sys.argv and "--set" in sys.argv and sys.argv[sys.argv.index("--set") + 1] != "smoke5":
+    import os
+
+    os.environ.setdefault("EVAL_TRACING_DEFAULT", "off")
+    os.environ["TRACING_PROVIDER"] = os.environ.get("EVAL_TRACING_OVERRIDE", "off")
+
 import pandas as pd  # noqa: E402
 from rich.progress import Progress  # noqa: E402
 
 from config import get_settings  # noqa: E402
-from db.conn import connect  # noqa: E402
+from db.conn import connect, get_pool  # noqa: E402
 from evals.metrics import aggregate, retrieval_metrics  # noqa: E402
 from pipeline.graph import run_pipeline, shutdown  # noqa: E402
+from pipeline.query_log import write_query_logs_bulk  # noqa: E402
 from pipeline.logging_setup import get_logger, setup_logging  # noqa: E402
 from pipeline.retrieval.runner import RETRIEVERS, RetrievalConfig  # noqa: E402
 
@@ -64,6 +76,8 @@ def main() -> None:
     ap.add_argument("--top-k", type=int, default=10)
     ap.add_argument("--candidate-k", type=int, default=30)
     ap.add_argument("--limit", type=int, default=None)
+    ap.add_argument("--trace", default=None, choices=["langfuse", "langsmith", "off"],
+                    help="tracing for this run (default: on for smoke5, off for larger sets — thousands of traces add little)")
     args = ap.parse_args()
     s = get_settings()
     setup_logging(s.log_level, s.log_dir, "eval")
@@ -96,24 +110,29 @@ def main() -> None:
     with Progress() as prog:
         task = prog.add_task("configs", total=len(configs) * len(questions))
         for cfg in configs:
-            rows, t0 = [], time.time()
+            rows, t0, pending_logs, pending_results = [], time.time(), [], []
             for q in questions:
                 gold = set(q["relevant_passage_ids"])
-                res = run_pipeline(q["question"], cfg, qa_id=q["id"], source="eval", skip_generation=True)
+                # log_query=False: logs are written in one batch per config (Supabase RTT is ~0.4 s per statement)
+                res = run_pipeline(q["question"], cfg, qa_id=q["id"], source="eval", skip_generation=True, log_query=False)
                 ranked = [h["passage_id"] for h in res.get("retrieved", [])]
                 m = retrieval_metrics(ranked, gold)
                 m["latency_ms"] = res["latency_ms"]
                 m["error"] = res.get("error")
+                res["metrics"] = m
                 rows.append(m)
+                pending_logs.append(res)
                 per_q_rows.append({"config": cfg.label(), "qa_id": q["id"], "question_type": q["question_type"],
                                    "query_log_id": res["id"], **m})
-                with connect() as conn, conn.cursor() as cur:
-                    cur.execute("""insert into eval_results (run_id, qa_id, metrics, retrieved, latency_ms, query_log_id)
-                                   values (%s, %s, %s, %s, %s, %s) on conflict do nothing""",
-                                (run_id, q["id"], json.dumps({"config": cfg.label(), **m}), json.dumps(ranked),
-                                 res["latency_ms"], res["id"]))
-                    conn.commit()
+                pending_results.append((run_id, q["id"], json.dumps({"config": cfg.label(), **m}), json.dumps(ranked),
+                                        res["latency_ms"], res["id"]))
                 prog.update(task, advance=1)
+            write_query_logs_bulk(pending_logs)
+            with get_pool().connection() as conn, conn.cursor() as cur:
+                cur.executemany("""insert into eval_results (run_id, qa_id, config, metrics, retrieved, latency_ms, query_log_id)
+                                   values (%s, %s, %s, %s, %s, %s, %s) on conflict do nothing""",
+                                [(r[0], r[1], cfg.label(), *r[2:]) for r in pending_results])
+                conn.commit()
             agg = aggregate(rows)
             agg.update(config=cfg.label(), strategy=cfg.strategy, retriever=cfg.retriever, transform=cfg.transform,
                        rerank=cfg.rerank, expansion=cfg.expansion, errors=sum(1 for r in rows if r.get("error")),

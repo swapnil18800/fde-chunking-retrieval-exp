@@ -125,11 +125,12 @@ create table if not exists eval_runs (
 );
 create table if not exists eval_results (
     run_id       uuid not null references eval_runs(id) on delete cascade,
+    config       text not null default '',          -- RetrievalConfig.label()
     qa_id        int  not null references qa_pairs(id),
     metrics      jsonb,
     retrieved    jsonb,
     answer       text,
     latency_ms   int,
     query_log_id uuid,
-    primary key (run_id, qa_id)
+    primary key (run_id, config, qa_id)
 );

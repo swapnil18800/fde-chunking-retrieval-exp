@@ -39,7 +39,7 @@ from ragas.metrics import (  # noqa: E402
 )
 
 from config import get_settings  # noqa: E402
-from db.conn import connect  # noqa: E402
+from db.conn import connect, get_pool  # noqa: E402
 from evals.metrics import aggregate, retrieval_metrics  # noqa: E402
 from evals.run_retrieval_eval import load_set  # noqa: E402
 from pipeline.graph import run_pipeline, shutdown  # noqa: E402
@@ -153,10 +153,10 @@ def main() -> None:
             per_q.append({"config": cfg.label(), "qa_id": q["id"], "question_type": q["question_type"],
                           "question": q["question"], "answer": out["answer"], "reference": q["answer"],
                           "query_log_id": out["id"], "trace_url": out.get("trace_url"), **row})
-            with connect() as conn, conn.cursor() as cur:
-                cur.execute("""insert into eval_results (run_id, qa_id, metrics, retrieved, answer, latency_ms, query_log_id)
-                               values (%s, %s, %s, %s, %s, %s, %s) on conflict do nothing""",
-                            (run_id, q["id"], json.dumps({"config": cfg.label(), **row}),
+            with get_pool().connection() as conn, conn.cursor() as cur:
+                cur.execute("""insert into eval_results (run_id, config, qa_id, metrics, retrieved, answer, latency_ms, query_log_id)
+                               values (%s, %s, %s, %s, %s, %s, %s, %s) on conflict do nothing""",
+                            (run_id, cfg.label(), q["id"], json.dumps({"config": cfg.label(), **row}),
                              json.dumps([h["passage_id"] for h in out["retrieved"]]), out["answer"], out["latency_ms"], out["id"]))
                 conn.commit()
         agg = aggregate(rows)
