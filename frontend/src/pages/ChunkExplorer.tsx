@@ -16,7 +16,8 @@ export default function ChunkExplorer() {
   useEffect(() => { if (pmid) api.passage(pmid).then(setP) }, [pmid])
   useEffect(() => { if (!pmid && samples.length) setPmid(samples[0].id) }, [samples, pmid])
   const runCustom = async () => { const r = await api.chunkPreview(custom); setP({ id: 0, text: r.text, n_words: r.text.split(' ').length, n_tokens: 0, sentence_offsets: null, url: '', chunks: r.chunks, entities: [] }) }
-  const strategies = p ? Object.keys(p.chunks).sort((a, b) => (opts?.strategies.findIndex((s) => s.name === a) ?? 0) - (opts?.strategies.findIndex((s) => s.name === b) ?? 0)) : []
+  const ORDER = ['passage', 'fixed_128_32', 'recursive_128_32', 'sentence', 'semantic']
+  const strategies = p ? Object.keys(p.chunks).sort((a, b) => (ORDER.indexOf(a) + 1 || 99) - (ORDER.indexOf(b) + 1 || 99)) : []
   return (
     <div className="grid gap-4 lg:grid-cols-4">
       <div className="space-y-3 lg:col-span-1">

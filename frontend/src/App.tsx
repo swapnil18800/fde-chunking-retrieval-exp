@@ -32,15 +32,15 @@ export default function App() {
               <div className="text-[11px] text-slate-500">chunking × retrieval experiments · rag-mini-bioasq</div>
             </div>
           </div>
-          <nav className="ml-4 flex flex-1 gap-1 overflow-x-auto">
+          <nav className="ml-2 flex flex-1 gap-0.5 overflow-x-auto">
             {TABS.map(({ to, label, icon: Icon }) => (
               <NavLink key={to} to={to} className={({ isActive }) =>
-                `flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm ${isActive ? 'bg-accent-soft text-accent font-medium' : 'text-slate-600 hover:bg-slate-100'}`}>
+                `flex items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-sm ${isActive ? 'bg-accent-soft text-accent font-medium' : 'text-slate-600 hover:bg-slate-100'}`}>
                 <Icon size={15} /> {label}
               </NavLink>
             ))}
           </nav>
-          <div className="hidden items-center gap-3 text-xs text-slate-500 md:flex">
+          <div className="hidden shrink-0 items-center gap-3 text-xs text-slate-500 xl:flex">
             {health && <><span>{health.passages.toLocaleString()} passages</span><span>·</span><span>{health.db_size}</span><span>·</span>
               <span className={`chip ${health.tracing === 'off' ? 'border-slate-200' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>tracing: {health.tracing}</span></>}
           </div>

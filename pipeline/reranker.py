@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 from functools import lru_cache
 
+import torch
 from sentence_transformers import CrossEncoder
 
 from config import get_settings
@@ -23,7 +24,8 @@ class Reranker:
         s = get_settings()
         self.model_name = model_name or s.reranker_model
         self.device = resolve_device(device or s.torch_device)
-        self.model = CrossEncoder(self.model_name, device=self.device, max_length=512)
+        # raw logits, not sigmoid: MedCPT's logits saturate a sigmoid at 1.0 and hide the ranking margin
+        self.model = CrossEncoder(self.model_name, device=self.device, max_length=512, activation_fn=torch.nn.Identity())
         log.info("[rerank] loaded %s on %s", self.model_name, self.device)
 
     def rerank(self, query: str, hits: list[Hit], k: int, text_of=lambda h: h.text or "") -> list[Hit]:
