@@ -1,0 +1,82 @@
+[
+ {
+  "qa_id": 44,
+  "question": "Does BNP increase after intensive exercise in athletes?",
+  "answer": "BNP and NTproBNP increase early after exercise in healthy athletes performing different types of sports. It is unknown the reason of this increase. The transient increases in BNP, NT-pro-BNP and troponin T are more likely to reflect myocardial stunning than cardiomyocyte damage.",
+  "question_type": "yesno",
+  "relevant_passage_ids": [
+   12890912,
+   16125505,
+   19092706,
+   22653984,
+   19638823,
+   16338248,
+   14523304,
+   11320362,
+   18076361,
+   17395308,
+   12417808,
+   18630737,
+   18184752,
+   18248532,
+   17289431,
+   16879068,
+   16446686,
+   23304255
+  ]
+ },
+ {
+  "qa_id": 201,
+  "question": "What is the suggested therapy for Mycobacterium avium infection?",
+  "answer": "The activity of TLC G-65 (a liposomal gentamicin preparation), alone and in combination with rifapentine, clarithromycin, clofazimine and ethambutol, was evaluated in the beige mouse (C57BL/6J--bgj/bgj) model of disseminated Mycobacterium avium infection. TLC G-65 in combination with rifapentine appears to be an attractive regimen for the treatment of infections caused by bacteria in the M. avium complex. Rifampin 10 mg/kg daily, ciprofloxacin 500 mg twice daily, clofazimine 100 mg every day, and ethambutol 15 mg/kg orally daily for 24 weeks, with or without amikacin 10 mg/kg intravenously or intramuscularly 5 days weekly for the first 4 weeks. In vivo phage treatment may also be used in some cases.",
+  "question_type": "factoid",
+  "relevant_passage_ids": [
+   8733409,
+   16584300,
+   10714126,
+   1832527,
+   19929882,
+   1387133,
+   9875582,
+   11073759
+  ]
+ },
+ {
+  "qa_id": 1637,
+  "question": "Which are the main clinical features of Fanconi anemia?",
+  "answer": "Fanconi anaemia (FA) is an autosomal recessive disease characterised by congenital abnormalities, defective haemopoiesis, and increased risk of malignancies.",
+  "question_type": "list",
+  "relevant_passage_ids": [
+   24604962,
+   23444773,
+   16675878,
+   21131752,
+   9389754,
+   21956823,
+   23585528,
+   8058745,
+   24773018,
+   10915769,
+   12525534
+  ]
+ },
+ {
+  "qa_id": 4554,
+  "question": "What is known about the protein patatin?",
+  "answer": "Patatin, the major protein found in potatoes, was purified and shows several isoforms. The essential amino acid content of patatin was ashighas 76%, indicating that it is a valuable protein source. Patatin was an O-linked glycoprotein that contained fucose monosaccharides, as well as mannose, rhamnose, glucose, galactose, xylose, and arabinose. Patatin had a fucosylated glycan structural feature, which strongly bound AAL (Aleuria aurantia Leukoagglutinin), a known fucose binding lectin. Moreover, thelipid metabolism regulatory effects of patatin on the fat catabolism, fat absorption, and inhibition of lipase activity were measured after high-fat feeding of zebrafish larvae. Results revealed that 37.0 \u03bcg/mL patatin promoted 23% lipid decomposition metabolism. Meanwhile patatin could inhibite lipase activity and fat absorption, whose effects accounted for half that of a positive control drug. Our findings suggest that patatin, a fucosylated glycoprotein, could potentially be used as a naturalactiveconstituent with anti-obesity effects.",
+  "question_type": "summary",
+  "relevant_passage_ids": [
+   34509145,
+   33272761
+  ]
+ },
+ {
+  "qa_id": 4157,
+  "question": "Is metoprolol metabolized by CYP2D6?",
+  "answer": "Yes, metoprolol is metabolized by CYP2D6.",
+  "question_type": "yesno",
+  "relevant_passage_ids": [
+   14732961
+  ]
+ }
+]

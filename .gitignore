@@ -216,3 +216,13 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ── project ──
+logs/*
+!logs/.gitkeep
+.cache/
+frontend/node_modules/
+frontend/dist/
+evals/results/*/per_question/
+*.npy
+.DS_Store

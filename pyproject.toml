@@ -1,0 +1,52 @@
+[project]
+name = "fde-chunking-retrieval-exp"
+version = "0.1.0"
+description = "Chunking x retrieval experiment lab for medical RAG on rag-mini-bioasq (Supabase pgvector, LangGraph, Langfuse, RAGAS)"
+authors = [{ name = "Swapnil Padhi", email = "swapnil18800@gmail.com" }]
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    # API
+    "fastapi>=0.141",
+    "uvicorn[standard]>=0.35",
+    "sse-starlette>=2.2",
+    "pydantic-settings>=2.10",
+    "python-dotenv>=1.1",
+    # DB
+    "psycopg[binary,pool]>=3.3",
+    "pgvector>=0.5",
+    # ML / retrieval
+    "sentence-transformers>=6.0",
+    "torch>=2.6",
+    "numpy>=2.0",
+    "bm25s>=0.3",
+    "PyStemmer>=2.2",
+    "tiktoken>=0.9",
+    "spacy>=3.8,<3.9",
+    "en_core_sci_sm @ https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.5.4/en_core_sci_sm-0.5.4.tar.gz",
+    # Orchestration / LLM
+    "langgraph>=1.0",
+    "langchain-core>=1.0",
+    "langchain-openai>=1.0",
+    # Observability
+    "langfuse>=4.15",
+    "langsmith>=0.4",
+    # Evaluation
+    "ragas>=0.4",
+    "datasets>=4.0",
+    "pandas>=2.2",
+    "rich>=14.0",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.0", "ruff>=0.12"]
+
+[tool.uv]
+package = false
+# We only need the scispaCy *model* (a plain spaCy pipeline), not the scispacy library (pins numpy<2).
+# en_core_sci_sm-0.5.4 pins spacy<3.8, but spacy 3.7/thinc 8.2 is binary-incompatible with numpy 2;
+# the model loads fine on spacy 3.8 (version warning only), so we override the pin.
+override-dependencies = ["spacy>=3.8,<3.9"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
