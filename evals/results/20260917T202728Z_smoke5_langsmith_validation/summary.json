@@ -1,0 +1,25 @@
+{
+ "run_id": "4786b5f3-a779-47e5-985e-ee6166f1c65e",
+ "name": "smoke5_langsmith_validation",
+ "eval_set": "smoke5",
+ "n_questions": 5,
+ "judge": "gemini-3.5-flash",
+ "top_k": 5,
+ "created": "20260917T202728Z",
+ "configs": [
+  {
+   "factual_correctness(mode=f1)": 0.09,
+   "faithfulness": 1.0,
+   "id_based_context_precision": 0.6,
+   "id_based_context_recall": 0.5351010101010101,
+   "latency_ms": 9612.2,
+   "mrr": 1.0,
+   "n_citations": 3.4,
+   "recall@5": 0.5351010101010101,
+   "n": 5,
+   "config": "passage+hybrid+rerank",
+   "seconds": 306.9,
+   "errors": 0
+  }
+ ]
+}

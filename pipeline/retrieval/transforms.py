@@ -56,7 +56,7 @@ def generate_queries(question: str, mode: str, callbacks: list | None = None) ->
     if mode == "none":
         return out
     llm = get_llm("transform")
-    cfg = {"callbacks": callbacks or [], "run_name": f"transform:{mode}"}
+    cfg = {"callbacks": callbacks or [], "run_name": "rewrite-query", "metadata": {"mode": mode}}
     if mode == "hyde":
         r = llm.chat(HYDE_PROMPT.format(q=question), config=cfg)
         out["hypothetical"] = r.text

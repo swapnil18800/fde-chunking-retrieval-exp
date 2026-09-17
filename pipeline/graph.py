@@ -61,7 +61,7 @@ def node_generate(state: RAGState) -> dict:
                 "tokens": {}, "stages": state["stages"] + [{"name": "generate", "ms": 0, "no_context": True}]}
     prompt = ANSWER_USER.format(question=state["question"], context=format_context(ctx))
     r = get_llm("generate").chat(prompt, system=ANSWER_SYSTEM,
-                                 config={"callbacks": state.get("callbacks") or [], "run_name": "generate_answer"})
+                                 config={"callbacks": state.get("callbacks") or [], "run_name": "generate-answer"})
     tokens = {"model": r.model, "prompt_tokens": r.prompt_tokens, "completion_tokens": r.completion_tokens,
               "attempts": r.attempts}
     return {"answer": r.text, "tokens": tokens,
@@ -80,13 +80,13 @@ def node_cite(state: RAGState) -> dict:
 
 def build_graph():
     g = StateGraph(RAGState)
-    g.add_node("retrieve", node_retrieve)
-    g.add_node("generate", node_generate)
-    g.add_node("cite", node_cite)
-    g.add_edge(START, "retrieve")
-    g.add_edge("retrieve", "generate")
-    g.add_edge("generate", "cite")
-    g.add_edge("cite", END)
+    g.add_node("retrieve-context", node_retrieve)
+    g.add_node("generate-answer", node_generate)
+    g.add_node("cite-sources", node_cite)
+    g.add_edge(START, "retrieve-context")
+    g.add_edge("retrieve-context", "generate-answer")
+    g.add_edge("generate-answer", "cite-sources")
+    g.add_edge("cite-sources", END)
     return g.compile()
 
 
@@ -116,7 +116,7 @@ def run_pipeline(question: str, cfg: RetrievalConfig, qa_id: int | None = None, 
             state = graph().invoke(
                 {"run_id": run_id, "question": question, "qa_id": qa_id, "source": source, "config": cfg_d,
                  "callbacks": callbacks, "stages": [], "skip_generation": skip_generation},
-                config={"callbacks": callbacks, "run_name": "rag-answer", "tags": tags,
+                config={"callbacks": callbacks, "run_name": "rag-graph", "tags": tags,
                         "metadata": {"run_id": run_id, "qa_id": qa_id, **cfg_d}})
             out.update(answer=state.get("answer", ""), citations=state.get("citations", []),
                        retrieved=[h.to_dict() | {"text": h.text, "context_text": h.meta.get("context_text")}

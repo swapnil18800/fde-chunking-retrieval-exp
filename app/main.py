@@ -42,9 +42,11 @@ async def lifespan(app: FastAPI):
     get_pool()
     # warm the local models + BM25 caches so the first request is not a 60 s stall
     from pipeline.embedder import get_embedder
+    from pipeline.reranker import get_reranker
     from pipeline.retrieval.bm25 import get_index
 
     await run_in_threadpool(get_embedder)
+    await run_in_threadpool(get_reranker)  # MedCPT download is ~440 MB on first run
     for st in await run_in_threadpool(list_strategies):
         try:
             await run_in_threadpool(get_index, st["name"])

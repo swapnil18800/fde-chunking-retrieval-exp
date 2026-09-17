@@ -122,3 +122,78 @@ def get_llm(role: str = "generate") -> LLMClient:
         else:
             _clients[role] = LLMClient()
     return _clients[role]
+
+
+# ── LangChain-native round-robin model (for RAGAS / any framework that holds ONE model object) ──
+from typing import Any, List, Optional  # noqa: E402
+
+from langchain_core.callbacks import AsyncCallbackManagerForLLMRun, CallbackManagerForLLMRun  # noqa: E402
+from langchain_core.messages import BaseMessage  # noqa: E402
+from langchain_core.outputs import ChatResult  # noqa: E402
+
+
+class RoundRobinChat(BaseChatModel):
+    """A BaseChatModel that spreads calls across several OpenAI-compatible models on the same key.
+
+    Gemini free-tier quotas are *per model* (15 RPM, RPD per model), so a judge that rotates over
+    GEMINI_MODELS gets N× the throughput. On 429/5xx it waits briefly and tries the next model.
+    Only the fields LangChain needs are declared; everything else is delegated to ChatOpenAI.
+    """
+
+    client: Any  # LLMClient
+    max_attempts: int = 6
+
+    @property
+    def _llm_type(self) -> str:
+        return "round-robin-openai-compatible"
+
+    @property
+    def _identifying_params(self) -> dict:
+        return {"models": self.client.models, "provider": self.client.provider}
+
+    def _pick(self) -> BaseChatModel:
+        return self.client.model()
+
+    def _generate(self, messages: List[BaseMessage], stop: Optional[List[str]] = None,
+                  run_manager: Optional[CallbackManagerForLLMRun] = None, **kwargs: Any) -> ChatResult:
+        kwargs.pop("n", None)  # Gemini's OpenAI endpoint rejects n>1
+        last: Exception | None = None
+        for attempt in range(1, self.max_attempts + 1):
+            m = self._pick()
+            try:
+                return m._generate(messages, stop=stop, run_manager=run_manager, **kwargs)
+            except Exception as e:  # noqa: BLE001
+                last = e
+                wait = 3.0 * attempt if "429" in str(e) else 1.5 * attempt
+                log.warning("[llm] judge call failed on %s (attempt %d): %s — retrying in %.0fs",
+                            getattr(m, "model_name", "?"), attempt, str(e)[:120], wait)
+                time.sleep(min(wait, 30.0))
+        raise RuntimeError(f"RoundRobinChat exhausted retries: {last}")
+
+    async def _agenerate(self, messages: List[BaseMessage], stop: Optional[List[str]] = None,
+                         run_manager: Optional[AsyncCallbackManagerForLLMRun] = None, **kwargs: Any) -> ChatResult:
+        import asyncio
+
+        kwargs.pop("n", None)
+        last: Exception | None = None
+        for attempt in range(1, self.max_attempts + 1):
+            m = self._pick()
+            try:
+                return await m._agenerate(messages, stop=stop, run_manager=run_manager, **kwargs)
+            except Exception as e:  # noqa: BLE001
+                last = e
+                wait = 3.0 * attempt if "429" in str(e) else 1.5 * attempt
+                log.warning("[llm] judge call failed on %s (attempt %d): %s — retrying in %.0fs",
+                            getattr(m, "model_name", "?"), attempt, str(e)[:120], wait)
+                await asyncio.sleep(min(wait, 30.0))
+        raise RuntimeError(f"RoundRobinChat exhausted retries: {last}")
+
+
+def judge_chat_model(provider: str | None = None) -> BaseChatModel:
+    """LangChain model for RAGAS. gemini → round-robin over all GEMINI_MODELS (+ judge model); deepseek → single."""
+    s = get_settings()
+    provider = provider or s.llm_provider
+    if provider == "deepseek":
+        return LLMClient("deepseek", max_tokens=4096).model()
+    models = list(dict.fromkeys([s.gemini_judge_model, *s.gemini_model_list]))
+    return RoundRobinChat(client=LLMClient("gemini", models=models, max_tokens=4096))

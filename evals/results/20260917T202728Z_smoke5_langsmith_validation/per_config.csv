@@ -1,0 +1,2 @@
+factual_correctness(mode=f1),faithfulness,id_based_context_precision,id_based_context_recall,latency_ms,mrr,n_citations,recall@5,n,config,seconds,errors
+0.09,1.0,0.6,0.5351010101010101,9612.2,1.0,3.4,0.5351010101010101,5,passage+hybrid+rerank,306.9,0

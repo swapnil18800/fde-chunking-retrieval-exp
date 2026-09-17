@@ -83,32 +83,39 @@ def langchain_callbacks() -> list:
 @contextmanager
 def trace_span(name: str, input: dict | None = None, session_id: str | None = None, tags: list[str] | None = None,
                metadata: dict | None = None):
-    """Root span for one pipeline run. Yields a TraceRef whose id/url are filled for langfuse.
+    """Root observation for one pipeline run (Langfuse SDK v4 semantics).
 
-    For langsmith, the root run is created by LangGraph itself; we return the project URL only.
+    The root span *is* the trace: its name/input/output become the trace's. Trace-level attributes
+    (session_id, tags, metadata) are propagated to every nested observation — including the ones the
+    LangChain CallbackHandler creates for LangGraph nodes and LLM generations — via propagate_attributes.
+    Yields (TraceRef, span). For langsmith the root run is created by LangGraph itself.
     """
     p = provider()
     ref = TraceRef(p)
     if p == "langfuse":
+        from langfuse import propagate_attributes
+
         lf = _state["langfuse"]
-        with lf.start_as_current_observation(as_type="span", name=name, input=input, metadata=metadata) as span:
-            span.update_trace(name=name, input=input, session_id=session_id, tags=tags or [], metadata=metadata)
-            ref.trace_id = lf.get_current_trace_id()
-            ref.url = lf.get_trace_url(trace_id=ref.trace_id)
-            try:
+        meta = {k: str(v) for k, v in (metadata or {}).items() if v is not None}
+        with lf.start_as_current_observation(as_type="chain", name=name, input=input, metadata=meta) as span:
+            with propagate_attributes(session_id=session_id, tags=tags or [], metadata=meta, trace_name=name):
+                ref.trace_id = lf.get_current_trace_id()
+                ref.url = lf.get_trace_url(trace_id=ref.trace_id)
+                span.set_trace_io(input=input)
                 yield ref, span
-            finally:
-                pass
         return
     if p == "langsmith":
         s = get_settings()
-        ref.url = f"https://smith.langchain.com/projects/p/{s.langsmith_project}"
+        ref.url = f"https://smith.langchain.com/o/-/projects/p/{s.langsmith_project}"
     yield ref, None
 
 
-def update_span(span, **kwargs) -> None:
+def update_span(span, output=None, **kwargs) -> None:
+    """Set the root span's output (also becomes the trace output) and any extra attributes."""
     if span is not None:
-        span.update(**kwargs)
+        span.update(output=output, **kwargs)
+        if output is not None:
+            span.set_trace_io(output=output)
 
 
 @contextmanager

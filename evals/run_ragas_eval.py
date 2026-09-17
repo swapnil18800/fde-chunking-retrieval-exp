@@ -43,7 +43,7 @@ from db.conn import connect  # noqa: E402
 from evals.metrics import aggregate, retrieval_metrics  # noqa: E402
 from evals.run_retrieval_eval import load_set  # noqa: E402
 from pipeline.graph import run_pipeline, shutdown  # noqa: E402
-from pipeline.llm import get_llm  # noqa: E402
+from pipeline.llm import judge_chat_model  # noqa: E402
 from pipeline.logging_setup import get_logger, setup_logging  # noqa: E402
 from pipeline.retrieval.runner import RetrievalConfig  # noqa: E402
 
@@ -91,7 +91,9 @@ def main() -> None:
     ap.add_argument("--top-k", type=int, default=5)
     ap.add_argument("--candidate-k", type=int, default=30)
     ap.add_argument("--limit", type=int, default=None)
-    ap.add_argument("--workers", type=int, default=2, help="ragas concurrency (free tier: keep <= 2)")
+    ap.add_argument("--workers", type=int, default=3, help="ragas concurrency (free tier: ~1 per Gemini model in rotation)")
+    ap.add_argument("--judge", default=None, choices=[None, "gemini", "deepseek"],
+                    help="judge provider (default LLM_PROVIDER). gemini = round-robin over GEMINI_MODELS")
     args = ap.parse_args()
     s = get_settings()
     setup_logging(s.log_level, s.log_dir, "eval")
@@ -106,16 +108,18 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     log.info("[ragas] %s: %d questions x %d configs -> %s", name, len(questions), len(configs), out_dir)
 
-    judge = LangchainLLMWrapper(get_llm("judge").model())
+    judge_name = args.judge or s.llm_provider
+    judge = LangchainLLMWrapper(judge_chat_model(judge_name))
     emb = LangchainEmbeddingsWrapper(LocalEmbeddings())
-    metrics = [Faithfulness(llm=judge), ResponseRelevancy(llm=judge, embeddings=emb),
+    # strictness=1: Gemini's OpenAI-compatible endpoint rejects n>1 ("Multiple candidates is not enabled")
+    metrics = [Faithfulness(llm=judge), ResponseRelevancy(llm=judge, embeddings=emb, strictness=1),
                IDBasedContextPrecision(), IDBasedContextRecall(), FactualCorrectness(llm=judge)]
     run_config = RunConfig(max_workers=args.workers, timeout=180, max_retries=6, max_wait=60)
 
     with connect() as conn, conn.cursor() as cur:
         cur.execute("""insert into eval_runs (name, kind, eval_set, config, n_questions) values (%s, 'ragas', %s, %s, %s)
                        returning id""", (name, args.set, json.dumps({"configs": [c.label() for c in configs],
-                                                                      "top_k": args.top_k, "judge": s.gemini_judge_model}),
+                                                                      "top_k": args.top_k, "judge": judge_name}),
                                           len(questions)))
         run_id = cur.fetchone()["id"]
         conn.commit()
@@ -134,8 +138,8 @@ def main() -> None:
                                             retrieved_context_ids=ctx_ids or ["-1"], reference_context_ids=gold,
                                             reference=q["answer"]))
             runs.append(out)
-        log.info("[ragas] %s: pipeline done for %d questions in %.0fs — scoring with %s", cfg.label(), len(runs),
-                 time.time() - t0, s.gemini_judge_model)
+        log.info("[ragas] %s: pipeline done for %d questions in %.0fs — scoring with %s judge", cfg.label(), len(runs),
+                 time.time() - t0, judge_name)
         result = evaluate(EvaluationDataset(samples=samples), metrics=metrics, run_config=run_config,
                           show_progress=True, raise_exceptions=False, batch_size=4)
         df = result.to_pandas()
@@ -164,11 +168,11 @@ def main() -> None:
     sdf.to_csv(out_dir / "per_config.csv", index=False)
     pd.DataFrame(per_q).to_csv(out_dir / "per_question.csv", index=False)
     summary = {"run_id": str(run_id), "name": name, "eval_set": args.set, "n_questions": len(questions),
-               "judge": s.gemini_judge_model, "top_k": args.top_k, "created": stamp, "configs": summaries}
+               "judge": judge_name, "top_k": args.top_k, "created": stamp, "configs": summaries}
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=1, default=str))
     cols = ["config"] + [c for c in RAGAS_COLS + ["recall@5", "mrr", "latency_ms", "errors"] if c in sdf.columns]
     (out_dir / "report.md").write_text(
-        f"# RAGAS eval — {name}\n\n- set `{args.set}` ({len(questions)} q) · judge `{s.gemini_judge_model}` · "
+        f"# RAGAS eval — {name}\n\n- set `{args.set}` ({len(questions)} q) · judge `{judge_name}` · "
         f"top_k={args.top_k} · run `{run_id}` · {stamp}\n\n" + sdf[cols].round(3).to_markdown(index=False) + "\n")
     with connect() as conn, conn.cursor() as cur:
         cur.execute("update eval_runs set summary = %s, status = 'done', finished_at = now() where id = %s",

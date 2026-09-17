@@ -87,8 +87,9 @@ def run_retrieval(question: str, cfg: RetrievalConfig, callbacks: list | None = 
     cfg.validate()
     stages: list[dict] = []
     t0 = time.time()
-    with child_span(f"transform:{cfg.transform}", as_type="chain" if cfg.transform != "none" else "span",
-                    input={"question": question}) as sp:
+    # observation names are stable verbs (Langfuse best practice); the variant lives in metadata
+    with child_span("transform-query", as_type="chain" if cfg.transform != "none" else "span",
+                    input={"question": question}, metadata={"mode": cfg.transform}) as sp:
         q = generate_queries(question, cfg.transform, callbacks)
         if sp is not None:
             sp.update(output={"queries": q["queries"], "hypothetical": q["hypothetical"]})
@@ -97,8 +98,8 @@ def run_retrieval(question: str, cfg: RetrievalConfig, callbacks: list | None = 
     n = cfg.candidate_k if cfg.rerank else cfg.top_k
     t0 = time.time()
     base = get_retriever(cfg.retriever)
-    with child_span(f"retrieve:{cfg.retriever}", as_type="retriever",
-                    input={"queries": q["queries"], "strategy": cfg.strategy, "k": n}) as sp:
+    with child_span("retrieve-chunks", as_type="retriever", input={"queries": q["queries"], "k": n},
+                    metadata={"retriever": cfg.retriever, "strategy": cfg.strategy}) as sp:
         hits = retrieve_multi(base, q["queries"], cfg.strategy, n)
         if sp is not None:
             sp.update(output=[{"chunk_id": h.chunk_id, "passage_id": h.passage_id, "score": round(h.score, 4)} for h in hits])
@@ -110,7 +111,8 @@ def run_retrieval(question: str, cfg: RetrievalConfig, callbacks: list | None = 
 
         t0 = time.time()
         attach_text(hits)
-        with child_span("rerank", as_type="span", input={"candidates": len(hits)}) as sp:
+        with child_span("rerank-chunks", as_type="span", input={"candidates": len(hits), "top_k": cfg.top_k},
+                        metadata={"model": "MedCPT-Cross-Encoder"}) as sp:
             hits = get_reranker().rerank(question, hits, cfg.top_k)
             if sp is not None:
                 sp.update(output=[{"chunk_id": h.chunk_id, "score": round(h.score, 3)} for h in hits])
