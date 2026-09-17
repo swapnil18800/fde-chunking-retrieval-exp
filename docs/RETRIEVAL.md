@@ -10,7 +10,7 @@ hits to the parent PMID, so a retriever cannot score by returning five chunks of
 | name | family | how | index | cost / latency |
 |---|---|---|---|---|
 | `bm25` | lexical | Lucene BM25 (`bm25s`, k1=1.2, b=0.75) over lower-cased, stop-worded, Snowball-stemmed tokens; one in-process index per strategy cached in `.cache/bm25/<strategy>/` | built from `chunk_text` on first use (~10 s / 50k chunks) | ~20 ms |
-| `dense` | semantic | cosine over `MedEmbed-small-v0.1` (384-d) embeddings in pgvector; HNSW where indexed (`ef_search = max(64, 2k)`), exact scan for `sentence` | partial HNSW per strategy | 15–60 ms (HNSW) / ~200 ms (exact 134k) |
+| `dense` | semantic | cosine over `MedEmbed-small-v0.1` (384-d) embeddings in pgvector; HNSW where indexed (`ef_search = max(64, 2k)`: `passage`, `recursive_128_32`), exact scan otherwise | partial HNSW | 15–60 ms (HNSW) / 50–200 ms (exact) |
 | `hybrid` | lexical + semantic | `dense` top-3k ∪ `bm25` top-3k → reciprocal-rank fusion (k=60) → top-k. Per-source ranks kept on each hit (`retriever_ranks`) | both | sum of both |
 | `grep` | literal | terms = scispaCy entities in the question + remaining content words; per term a word-boundary regex scan over `passages.text`; passage score = Σ log(N/df_term) over matched terms; best chunk per passage = most matched terms. No embeddings, no LLM | none (sequential scan of 20k abstracts) | 0.5–6 s (scales with #terms) |
 | `kg` | graph | question entities → `kg_entities` (exact, else trigram similarity ≥ 0.55) → passages via `passage_ids`, scored Σ log(N/df); 1-hop: co-occurring entities of the top-40 passages add damped weight (0.3); final chunk per passage chosen by cosine to the query | `kg_entities` arrays + trigram GIN | 0.3–3 s |

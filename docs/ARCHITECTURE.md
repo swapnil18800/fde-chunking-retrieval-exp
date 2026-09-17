@@ -78,7 +78,7 @@ flowchart LR
 500 MB free tier, and offsets give exact highlight spans for citations for free.
 
 **Why `halfvec`?** 2 bytes/dim halves vector storage with negligible recall loss at 384-d.
-HNSW indexes are partial (`where strategy = '…'`) so each strategy has its own graph.
+HNSW indexes are partial (`where strategy = '…'`); on the free tier only `passage` and `recursive_128_32` are indexed, the rest are exact-scanned (50–200 ms).
 
 ## 4. Request lifecycle (one question)
 
@@ -124,10 +124,11 @@ POST /api/ask {question, strategy, retriever, transform, rerank, expansion, top_
 | Item | Size |
 |---|---|
 | passages (20k) + qa + KG arrays | ~55 MB |
-| chunks: 5 strategies ≈ 280k × (768 B halfvec + ~60 B row) | ~230 MB |
-| HNSW (passage, fixed, recursive, semantic) ≈ 170k × ~900 B | ~150 MB |
-| `sentence` set (~134k chunks) — exact scan, no index | included above |
-| logs / eval results | small, grows |
+| chunks: 5 strategies = 317k × (768 B halfvec + ~60 B row) | ~260 MB (heap) |
+| HNSW on `passage` (20k) + `recursive_128_32` (57k) | ~80 MB |
+| `fixed_128_32`, `sentence`, `semantic` — exact scan, no index | included above |
+| logs / eval results | ~10–20 MB per full matrix run |
+| **measured after build + vacuum** | **~430 MB** (488 MB before dropping the `fixed` index) |
 
 The 40k → 20k subsample (`corpus_meta.subsample`) is what makes this fit; the recipe keeps every
 gold passage of `eval150`, adds gold passages of other BioASQ questions as topically-close

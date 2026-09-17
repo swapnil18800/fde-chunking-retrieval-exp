@@ -52,7 +52,7 @@ Full data build order: `docs/HOW_TO_RUN.md` §1.
   cannot take bind parameters — use `psycopg.sql` or f-strings with validated values.
 - **Chunks are offsets** into `passages.text`; never store chunk text. Use the `chunk_text` view.
 - **Storage budget** is the Supabase free tier (500 MB). Check `GET /api/health` → `db_size` before
-  adding chunk sets or indexes; the `sentence` set is intentionally not HNSW-indexed (`NO_INDEX`).
+  adding chunk sets or indexes; only `passage` and `recursive_128_32` are HNSW-indexed (`NO_INDEX` in build_chunks.py).
 - **Gemini free tier = 15 RPM per model.** Round-robin is in `pipeline/llm.py`; don't add tight loops
   of LLM calls without checking `GEMINI_MODELS`. DeepSeek only when quality is imperative.
 - **Observation names in traces are stable verbs** (`retrieve-chunks`, `generate-answer`); put variants

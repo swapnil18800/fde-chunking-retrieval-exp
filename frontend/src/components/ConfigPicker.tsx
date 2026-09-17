@@ -2,7 +2,7 @@ import type { AskConfig, Options } from '../lib/api'
 
 const HELP: Record<string, string> = {
   bm25: 'Lexical: Lucene BM25 over stemmed tokens (bm25s, in-process index per strategy).',
-  dense: 'Semantic: cosine over MedEmbed-small (384-d) embeddings in pgvector (HNSW).',
+  dense: 'Semantic: cosine over MedEmbed-small (384-d) embeddings in pgvector (HNSW on passage/recursive, exact scan otherwise).',
   hybrid: 'Dense ∪ BM25 fused with reciprocal-rank fusion (k=60).',
   grep: 'Literal term/regex matching over passages (entity + content words), the way an agent with a grep tool searches.',
   kg: 'Entity graph: query entities → passages via the scispaCy entity–passage graph, 1-hop expansion, dense tie-break.',

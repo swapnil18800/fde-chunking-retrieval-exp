@@ -37,9 +37,9 @@ small-to-big*.
 - **Semantic threshold** is *global*, not per-document: LangChain's percentile-per-document
   approach is unstable on 6-sentence documents. The calibrated threshold is stored in
   `chunk_strategies.params.threshold`.
-- **Storage**: offsets not text; `halfvec(384)`; partial HNSW indexes per strategy
-  (`chunks_hnsw_<strategy>`, m=16, ef_construction=96). The `sentence` set is exact-scanned to stay
-  inside the free tier (see ARCHITECTURE.md §6).
+- **Storage**: offsets not text; `halfvec(384)`; partial HNSW indexes (`chunks_hnsw_<strategy>`, m=16,
+  ef_construction=96) on `passage` and `recursive_128_32` only — `fixed_128_32`, `sentence` and `semantic`
+  are exact-scanned to stay inside the free tier (see ARCHITECTURE.md §6).
 
 ## Adding a strategy
 

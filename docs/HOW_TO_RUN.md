@@ -36,7 +36,7 @@ uv run python db/ingestion/build_chunks.py --all          # 5 strategies, embed,
 ```
 
 Each step is idempotent and logs to `logs/ingest.jsonl`. `--replace` rebuilds. Skip the subsample
-step on a Pro instance (and drop `NO_INDEX` in `build_chunks.py` to index the `sentence` set too).
+step on a Pro instance (and empty `NO_INDEX` in `build_chunks.py` to HNSW-index every set).
 
 ## 2. Run the app
 
