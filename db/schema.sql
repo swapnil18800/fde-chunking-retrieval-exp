@@ -15,7 +15,8 @@ create table if not exists passages (
     n_chars          int     not null,
     n_words          int     not null,
     n_tokens         int,                       -- cl100k tokens
-    sentence_offsets int[]                      -- char start of each sentence (filled by preprocess_nlp.py)
+    sentence_offsets int[],                     -- char start of each sentence (filled by preprocess_nlp.py)
+    kg_entity_ids    int[]                      -- entities mentioned (filled by preprocess_nlp.py)
 );
 
 -- 4,719 BioASQ questions with gold passage ids
@@ -23,8 +24,16 @@ create table if not exists qa_pairs (
     id                   int primary key,
     question             text not null,
     answer               text not null,
-    relevant_passage_ids bigint[] not null,
+    relevant_passage_ids bigint[] not null,     -- gold ids still present in the corpus
+    n_gold_total         int,                   -- gold count in the original dataset (before subsampling)
     question_type        text                   -- yesno | list | factoid | summary (heuristic)
+);
+
+-- provenance of corpus-level operations (e.g. the free-tier subsample recipe)
+create table if not exists corpus_meta (
+    key        text primary key,
+    value      jsonb,
+    updated_at timestamptz default now()
 );
 
 -- Named question subsets: smoke (5) / eval150 (150) / ...
@@ -66,25 +75,18 @@ select c.id, c.strategy, c.passage_id, c.chunk_index, c.char_start, c.char_end, 
        substr(p.text, c.char_start + 1, c.char_end - c.char_start) as text
 from chunks c join passages p on p.id = c.passage_id;
 
--- ── Knowledge graph (scispaCy entities, co-occurrence edges) ──────────────────
+-- ── Knowledge graph (scispaCy entities → passages, stored as arrays to stay small) ─────
+-- entity→passage adjacency lives in kg_entities.passage_ids; passage→entity in passages.kg_entity_ids.
+-- Co-occurrence (1-hop expansion) is computed at query time from those two arrays.
 create table if not exists kg_entities (
-    id       serial primary key,
-    name     text unique not null,              -- lower-cased surface form
-    doc_freq int  not null default 0
+    id          serial primary key,
+    name        text unique not null,           -- lower-cased surface form
+    doc_freq    int  not null default 0,
+    passage_ids bigint[]
 );
-create table if not exists kg_mentions (
-    entity_id  int    not null references kg_entities(id) on delete cascade,
-    passage_id bigint not null references passages(id) on delete cascade,
-    n          int    not null default 1,
-    primary key (entity_id, passage_id)
-);
-create index if not exists kg_mentions_passage_idx on kg_mentions (passage_id);
-create table if not exists kg_edges (
-    src    int not null references kg_entities(id) on delete cascade,
-    dst    int not null references kg_entities(id) on delete cascade,
-    weight int not null,                        -- number of passages where both co-occur
-    primary key (src, dst)
-);
+-- fuzzy entity lookup for query terms
+create extension if not exists pg_trgm;
+create index if not exists kg_entities_name_trgm on kg_entities using gin (name gin_trgm_ops);
 
 -- ── Observability: every question that flows through the pipeline ────────────
 create table if not exists query_logs (

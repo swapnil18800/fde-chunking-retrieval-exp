@@ -3,19 +3,17 @@
     uv run python db/ingestion/preprocess_nlp.py              # skips passages that already have offsets
     uv run python db/ingestion/preprocess_nlp.py --replace    # recompute everything, rebuild kg_*
 
-Knowledge graph = entity–passage bipartite graph (`kg_mentions`) + entity co-occurrence
-edges (`kg_edges`, weight = #passages where both appear). Entities are scispaCy `en_core_sci_sm`
-surface forms, lower-cased, noise-filtered (pipeline/nlp.py), kept when 2 <= doc_freq <= 5% of corpus.
-Edges are kept when weight >= 2. No UMLS linking (kept deliberately simple and free).
+Knowledge graph = entity–passage bipartite graph stored as two array columns (kg_entities.passage_ids,
+passages.kg_entity_ids) — ~25 MB instead of ~180 MB as row tables. Entity co-occurrence (1-hop
+expansion) is derived at query time. Entities are scispaCy `en_core_sci_sm` surface forms,
+lower-cased, noise-filtered (pipeline/nlp.py), df-capped. No UMLS linking (deliberately simple and free).
 """
 
 from __future__ import annotations
 
 import argparse
-import math
 import sys
-from collections import Counter, defaultdict
-from itertools import combinations
+from collections import defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -27,10 +25,9 @@ from db.conn import connect  # noqa: E402
 from pipeline.logging_setup import get_logger, setup_logging  # noqa: E402
 from pipeline.nlp import entities, load_sci_nlp, sentence_offsets  # noqa: E402
 
-MAX_DOC_FREQ_FRAC = 0.05
+MAX_DOC_FREQ_FRAC = 0.025      # multi-word entities: drop if in > 2.5% of passages
+MAX_DF_SINGLE_WORD = 300       # single words ("mechanism", "reduced") are mostly generic — tighter cap
 MIN_DOC_FREQ = 2
-MIN_EDGE_WEIGHT = 2
-MAX_ENTS_PER_PASSAGE_FOR_EDGES = 25
 
 
 def main() -> None:
@@ -79,41 +76,31 @@ def main() -> None:
         n_sent = sum(len(o) for _, o in offsets)
         log.info("[nlp] sentence offsets written: %d sentences, %.1f per passage", n_sent, n_sent / n_total)
 
-        # ── knowledge graph ───────────────────────────────────────────────────
+        # ── knowledge graph (array form) ──────────────────────────────────────
         max_df = int(n_total * MAX_DOC_FREQ_FRAC)
-        keep = {e: pm for e, pm in mentions.items() if MIN_DOC_FREQ <= len(pm) <= max_df}
-        log.info("[nlp] entities: %d raw -> %d kept (2 <= df <= %d)", len(mentions), len(keep), max_df)
+        keep = {e: pm for e, pm in mentions.items()
+                if MIN_DOC_FREQ <= len(pm) <= (max_df if " " in e else MAX_DF_SINGLE_WORD)}
+        log.info("[nlp] entities: %d raw -> %d kept (df in [%d, %d], single-word <= %d)", len(mentions), len(keep),
+                 MIN_DOC_FREQ, max_df, MAX_DF_SINGLE_WORD)
         with conn.cursor() as cur:
-            cur.execute("truncate kg_edges, kg_mentions, kg_entities restart identity")
-            with cur.copy("copy kg_entities (name, doc_freq) from stdin") as cp:
+            cur.execute("truncate kg_entities restart identity")
+            with cur.copy("copy kg_entities (name, doc_freq, passage_ids) from stdin") as cp:
                 for e, pm in keep.items():
-                    cp.write_row((e, len(pm)))
+                    cp.write_row((e, len(pm), sorted(pm)))
             cur.execute("select id, name from kg_entities")
             eid = {r["name"]: r["id"] for r in cur.fetchall()}
-            with cur.copy("copy kg_mentions (entity_id, passage_id, n) from stdin") as cp:
-                for e, pm in keep.items():
-                    for pid, n in pm.items():
-                        cp.write_row((eid[e], pid, n))
-            # co-occurrence edges (undirected, stored once with src < dst)
-            edges: Counter = Counter()
-            for pid, ents in per_passage.items():
-                kept = sorted((eid[e] for e in ents if e in eid))
-                if len(kept) > MAX_ENTS_PER_PASSAGE_FOR_EDGES:  # prefer rarer entities
-                    kept = sorted(kept, key=lambda i: 0)[:MAX_ENTS_PER_PASSAGE_FOR_EDGES]
-                for a, b in combinations(kept, 2):
-                    edges[(a, b)] += 1
-            strong = [(a, b, w) for (a, b), w in edges.items() if w >= MIN_EDGE_WEIGHT]
-            with cur.copy("copy kg_edges (src, dst, weight) from stdin") as cp:
-                for a, b, w in strong:
-                    cp.write_row((a, b, w))
+            cur.execute("create temp table tmp_pe (id bigint, ents int[]) on commit drop")
+            with cur.copy("copy tmp_pe (id, ents) from stdin") as cp:
+                for pid, ents in per_passage.items():
+                    cp.write_row((pid, sorted(eid[e] for e in ents if e in eid)))
+            cur.execute("update passages p set kg_entity_ids = t.ents from tmp_pe t where t.id = p.id")
             cur.execute("create extension if not exists pg_trgm")
             cur.execute("create index if not exists kg_entities_name_trgm on kg_entities using gin (name gin_trgm_ops)")
             cur.execute("select pg_size_pretty(pg_database_size(current_database())) as size")
             size = cur.fetchone()["size"]
         conn.commit()
         n_m = sum(len(pm) for pm in keep.values())
-        log.info("[nlp] kg built: %d entities, %d mentions, %d edges (of %d pairs, w>=%d). db=%s",
-                 len(keep), n_m, len(strong), len(edges), MIN_EDGE_WEIGHT, size)
+        log.info("[nlp] kg built: %d entities, %d entity-passage links. db=%s", len(keep), n_m, size)
         top = sorted(keep.items(), key=lambda kv: -len(kv[1]))[:15]
         log.info("[nlp] most frequent kept entities: %s", [(e, len(pm)) for e, pm in top])
 
