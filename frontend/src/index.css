@@ -16,8 +16,9 @@ body { @apply m-0 min-h-screen; }
 .card { @apply rounded-xl border border-slate-200 bg-white shadow-sm; }
 .chip { @apply inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium; }
 .btn { @apply inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition; }
-.btn-primary { @apply btn bg-accent text-white hover:bg-cyan-800 disabled:opacity-50; }
-.btn-ghost { @apply btn border border-slate-200 bg-white hover:bg-slate-50; }
+/* Tailwind v4 cannot @apply custom classes, so the .btn base is repeated here */
+.btn-primary { @apply inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition bg-accent text-white hover:bg-cyan-800 disabled:opacity-50; }
+.btn-ghost { @apply inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition border border-slate-200 bg-white hover:bg-slate-50; }
 .label { @apply text-[11px] font-semibold uppercase tracking-wide text-slate-500; }
 .input { @apply w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-accent; }
 mark.cite { @apply rounded bg-gold-soft px-0.5 text-inherit; }
