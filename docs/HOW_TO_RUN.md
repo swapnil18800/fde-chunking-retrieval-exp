@@ -53,8 +53,9 @@ Production: `cd frontend && npm run build` → FastAPI serves `frontend/dist` at
 # Tier 1: retrieval metrics, no LLM — the full matrix on 150 questions (~30-40 min)
 uv run python evals/run_retrieval_eval.py --set eval150 --matrix
 uv run python evals/run_retrieval_eval.py --set eval150 --matrix --rerank-only          # + MedCPT on every cell
-uv run python evals/run_retrieval_eval.py --set eval150 --strategies sentence --retrievers hybrid \
-    --transforms hyde multi_query decompose --expansions none window parent           # LLM transforms
+uv run python evals/run_retrieval_eval.py --set eval150 --strategies passage sentence --retrievers hybrid \
+    --transforms hyde multi_query decompose                                            # LLM transforms
+# (expansion window/parent only affects generation → evaluate it with RAGAS, not Tier 1)
 
 # Tier 2: RAGAS on the winners (Gemini judge, free tier → slow; ~15 RPM)
 uv run python evals/run_ragas_eval.py --set smoke5  --configs passage+hybrid+rerank      # harness check

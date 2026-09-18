@@ -14,8 +14,6 @@ description: Run, extend or re-run the evaluation matrix (Tier-1 retrieval metri
 ```bash
 uv run python evals/run_retrieval_eval.py --set eval150 --matrix                       # 5 × 5 base cells
 uv run python evals/run_retrieval_eval.py --set eval150 --matrix --rerank-only         # every cell + MedCPT
-uv run python evals/run_retrieval_eval.py --set eval150 --strategies sentence recursive_128_32 \
-     --retrievers hybrid --expansions none window parent --name expansion_sweep
 uv run python evals/run_retrieval_eval.py --set eval150 --strategies passage --retrievers hybrid \
      --transforms hyde multi_query decompose --name transforms   # LLM calls: ~150 × 3 at 15 RPM/model
 ```
@@ -40,7 +38,9 @@ imported before `ragas` (langchain-community 0.4 shim).
 - Compare cells only within one run (same question set, same `top_k`/`candidate_k`).
 - `passage` has a structural recall advantage (gold granularity); judge fine strategies with `+parent`
   or by `precision@5` / RAGAS faithfulness, not recall alone.
-- `grep`/`kg` are baselines; expect lower recall — the point is to *measure* the gap.
+- `grep`/`kg` are baselines; expect lower recall — the point is to *measure* the gap. They rank passages, so their
+  Tier-1 numbers are identical across chunking strategies (only the displayed chunk differs).
+- Expansion (`window`/`parent`) never changes Tier-1 metrics — evaluate it with RAGAS only.
 - Per-type breakdown: `per_question.csv` has `question_type`; list questions have the most gold and the lowest recall@k by construction.
 
 ## Updating docs after a run

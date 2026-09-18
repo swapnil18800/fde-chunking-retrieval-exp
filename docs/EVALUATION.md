@@ -32,8 +32,10 @@
 `recall@10`** (BioASQ questions average 10 gold passages). `precision@5` is the best single proxy
 for "what the generator sees".
 
-Sweeps: the 5 × 5 base matrix; the matrix `+rerank` (MedCPT over 30 candidates); expansion
-(`window`/`parent`) on fine strategies; LLM query transforms (`hyde`/`multi_query`/`decompose`).
+Sweeps: the 5 × 5 base matrix; `+rerank` (MedCPT over 30 candidates) for bm25/dense/hybrid; LLM query
+transforms (`hyde`/`multi_query`/`decompose`). **Expansion (`window`/`parent`) is not a Tier-1 axis**: it
+changes the context handed to the generator, not which passages rank, so passage-level metrics are
+identical by construction (verified: `sentence+hybrid+window` ≡ `sentence+hybrid`). It is evaluated in Tier 2.
 
 ## 3. Tier 2 — RAGAS (`evals/run_ragas_eval.py`)
 
