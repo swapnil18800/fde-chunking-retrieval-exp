@@ -29,9 +29,13 @@ async def _configure_async(conn: psycopg.AsyncConnection) -> None:
 @lru_cache
 def get_pool() -> ConnectionPool:
     s = get_settings()
+    # check=: validate a connection before handing it out, so connections killed while the laptop
+    # slept (or by Supabase idle timeouts) are transparently replaced instead of raising OperationalError.
     pool = ConnectionPool(
         s.database_url, min_size=s.db_pool_min, max_size=s.db_pool_max, open=True,
-        configure=_configure, kwargs={"row_factory": dict_row, "connect_timeout": 15},
+        configure=_configure, check=ConnectionPool.check_connection,
+        kwargs={"row_factory": dict_row, "connect_timeout": 15, "keepalives": 1, "keepalives_idle": 60,
+                "keepalives_interval": 15, "keepalives_count": 3},
     )
     return pool
 
@@ -45,7 +49,9 @@ async def get_async_pool() -> AsyncConnectionPool:
         s = get_settings()
         _async_pool = AsyncConnectionPool(
             s.database_url, min_size=s.db_pool_min, max_size=s.db_pool_max, open=False,
-            configure=_configure_async, kwargs={"row_factory": dict_row, "connect_timeout": 15},
+            configure=_configure_async, check=AsyncConnectionPool.check_connection,
+            kwargs={"row_factory": dict_row, "connect_timeout": 15, "keepalives": 1, "keepalives_idle": 60,
+                    "keepalives_interval": 15, "keepalives_count": 3},
         )
         await _async_pool.open()
     return _async_pool
