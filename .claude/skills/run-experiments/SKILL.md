@@ -24,7 +24,8 @@ run also writes a `query_logs` row (source=eval) so any number can be traced to 
 ## Tier 2 — RAGAS (Gemini judge, ~15 RPM → budget time)
 ```bash
 uv run python evals/run_ragas_eval.py --set smoke5 --configs passage+hybrid+rerank
-uv run python evals/run_ragas_eval.py --set eval150 --limit 50 --configs <label> <label>
+uv run python evals/run_ragas_eval.py --set eval150 --limit 40 --workers 6 --judge deepseek --configs <label> <label>
+# Gemini judge (default) runs ~37 s/sample on the free tier (≈2 h per config); DeepSeek judges 40 q in ~3 min for ≈$0.5.
 ```
 Metrics: `faithfulness`, `answer_relevancy` (local embeddings), `id_based_context_precision/recall`
 (exact, from PMIDs), `factual_correctness` (vs BioASQ reference). `evals/ragas_compat.py` must be

@@ -11,6 +11,21 @@ tiers: Supabase pgvector, Gemini, Langfuse, and local open-source models on a la
 
 ---
 
+## Screenshots
+
+<table>
+<tr>
+<td align="center" width="33%"><a href="assets/screenshots/playground.png"><img src="assets/screenshots/playground.png" alt="Playground"/></a><br/><sub><b>Playground</b> — pick chunking/retriever/transform/rerank/expansion, cited answer, stage timings, trace link</sub></td>
+<td align="center" width="33%"><a href="assets/screenshots/compare.png"><img src="assets/screenshots/compare.png" alt="Compare"/></a><br/><sub><b>Compare</b> — same question across configs, gold overlap highlighted</sub></td>
+<td align="center" width="33%"><a href="assets/screenshots/leaderboard.png"><img src="assets/screenshots/leaderboard.png" alt="Leaderboard"/></a><br/><sub><b>Leaderboard</b> — chunking × retriever heatmap from the eval runs</sub></td>
+</tr>
+<tr>
+<td align="center"><a href="assets/screenshots/chunk-explorer.png"><img src="assets/screenshots/chunk-explorer.png" alt="Chunk Explorer"/></a><br/><sub><b>Chunk Explorer</b> — how every strategy cuts one abstract</sub></td>
+<td align="center"><a href="assets/screenshots/knowledge-graph.png"><img src="assets/screenshots/knowledge-graph.png" alt="Knowledge Graph"/></a><br/><sub><b>Knowledge Graph</b> — entity neighbourhood the <code>kg</code> retriever walks</sub></td>
+<td align="center"><a href="assets/screenshots/query-inspector.png"><img src="assets/screenshots/query-inspector.png" alt="Query Inspector"/></a><br/><sub><b>Query Inspector</b> — every logged run: stages, per-retriever ranks, citations, trace</sub></td>
+</tr>
+</table>
+
 ## What's inside
 
 | Axis | Options | Notes |
@@ -78,7 +93,20 @@ Full diagram, data model and component map: [docs/ARCHITECTURE.md](docs/ARCHITEC
 - **MedCPT cross-encoder reranking lifts every cell** (recall@10 +0.023 avg, MRR → 0.79–0.81 across the board) and shrinks the chunking gap; best overall: `passage+bm25+rerank` **0.568 recall@10 / 0.552 precision@5 / 0.803 MRR**; best sub-abstract: `recursive_128_32+bm25+rerank` 0.515.
 - **Query transforms**: HyDE is the only one that pays, and only on whole abstracts — `passage+hybrid+hyde` 0.558 recall@10 with the **best MRR of any config (0.827)**; `multi_query` +1.4 recall / flat MRR; `decompose` (multi-hop) no gain on this single-hop benchmark. Each costs ~5 s of free-tier LLM latency.
 
-Rerank / query-transform sweeps and RAGAS answer quality: [docs/EVALUATION.md](docs/EVALUATION.md). What was hard, what we traded off (20k subset, HNSW on two sets, small local embedder, free LLM quota) and what to do next: [docs/CHALLENGES_AND_TRADEOFFS.md](docs/CHALLENGES_AND_TRADEOFFS.md).
+
+**Tier 2 — RAGAS answer quality (40 questions, Gemini answers, DeepSeek judge, top_k=5)**
+
+| config | faithfulness | answer relevancy | ctx precision (ids) | ctx recall (ids) | factual F1 |
+|:--|--:|--:|--:|--:|--:|
+| passage+hybrid | 0.934 | 0.867 | 0.505 | 0.529 | 0.420 |
+| **passage+bm25+rerank** | 0.896 | **0.881** | 0.525 | **0.566** | **0.447** |
+| passage+hybrid+hyde | 0.905 | 0.862 | 0.500 | 0.515 | 0.370 |
+| sentence+hybrid+rerank+window | 0.917 | 0.873 | **0.644** | 0.501 | 0.382 |
+
+- Answers are grounded everywhere (faithfulness ≥ 0.90); **factual correctness follows context recall** — retrieval is the ceiling, so the reranked-BM25 config is the best end-to-end system.
+- HyDE's MRR advantage does not survive to answer quality (lowest recall + F1 on this slice, 2× latency); sentence-window context is the most *precise* evidence (+0.14 context precision) but covers fewer abstracts.
+
+Full tables, deltas and the reasoning behind each number: [docs/EVALUATION.md](docs/EVALUATION.md). What was hard, what we traded off (20k subset, HNSW on two sets, small local embedder, free LLM quota) and what to do next: [docs/CHALLENGES_AND_TRADEOFFS.md](docs/CHALLENGES_AND_TRADEOFFS.md).
 
 ## Run it yourself (from zero)
 
