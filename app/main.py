@@ -137,12 +137,12 @@ def questions(set_name: str = Query("eval150", alias="set"), q: str | None = Non
     with get_pool().connection() as conn, conn.cursor() as cur:
         if set_name == "all":
             cur.execute("select id, question, question_type, cardinality(relevant_passage_ids) n_gold from qa_pairs "
-                        "where cardinality(relevant_passage_ids) > 0 and (%s is null or question ilike %s) order by id limit %s",
+                        "where cardinality(relevant_passage_ids) > 0 and (%s::text is null or question ilike %s::text) order by id limit %s",
                         (q, f"%{q}%" if q else None, limit))
         else:
             cur.execute("""select q.id, q.question, q.question_type, cardinality(q.relevant_passage_ids) n_gold
                            from eval_sets e join qa_pairs q on q.id = e.qa_id where e.name = %s
-                           and (%s is null or q.question ilike %s) order by e.position limit %s""",
+                           and (%s::text is null or q.question ilike %s::text) order by e.position limit %s""",
                         (set_name, q, f"%{q}%" if q else None, limit))
         return cur.fetchall()
 
@@ -257,7 +257,7 @@ def log_detail(qid: str):
 def eval_runs(kind: str | None = None):
     with get_pool().connection() as conn, conn.cursor() as cur:
         cur.execute("select id, created_at, finished_at, name, kind, eval_set, n_questions, status, config, summary "
-                    "from eval_runs where (%s is null or kind = %s) order by created_at desc", (kind, kind))
+                    "from eval_runs where (%s::text is null or kind = %s::text) order by created_at desc", (kind, kind))
         return cur.fetchall()
 
 

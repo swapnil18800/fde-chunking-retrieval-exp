@@ -61,8 +61,22 @@ Full diagram, data model and component map: [docs/ARCHITECTURE.md](docs/ARCHITEC
 
 ## Results
 
-_Pending — the full `eval150` matrix is running; tables will be added here and in
-[docs/EVALUATION.md](docs/EVALUATION.md)._
+**Tier 1 — retrieval on `eval150` (150 BioASQ questions, recall@10 vs gold PMIDs, no rerank)**
+
+| strategy         |   bm25 |   dense |   grep |   hybrid |    kg |
+|:-----------------|-------:|--------:|-------:|---------:|------:|
+| fixed_128_32     |  0.485 |   0.453 |  0.447 |    0.497 | 0.346 |
+| passage          |  0.533 |   0.46  |  0.447 |    0.533 | 0.346 |
+| recursive_128_32 |  0.478 |   0.449 |  0.447 |    0.497 | 0.346 |
+| semantic         |  0.479 |   0.468 |  0.447 |    0.495 | 0.346 |
+| sentence         |  0.446 |   0.471 |  0.447 |    0.484 | 0.346 |
+
+- **Cutting below the abstract costs ~4 recall points, and *how* you cut barely matters** (fixed 0.497 · recursive 0.497 · semantic 0.495 · sentence 0.484 with hybrid). Gold labels are whole abstracts, so `passage` has a structural edge — precision@5 is flat (0.49–0.53) across strategies.
+- **Chunk length flips the winner between lexical and dense**: BM25 wins on whole abstracts (0.533 vs 0.460), dense wins on single sentences (0.471 vs 0.446). Entity-heavy medical questions favour exact tokens against long text; a small 384-d embedder represents one sentence better than one abstract.
+- **Hybrid RRF is never worse than its parts**; `grep` (literal terms) trails BM25 by 9 points — the measured value of stemming + IDF; `kg` (entity co-occurrence) is weakest (0.346) but the only retriever that explains its hits.
+- Yes/no questions are easiest (0.59), list questions hardest (0.48): their 8.5 gold abstracts don't fit in top-10.
+
+Rerank / expansion / query-transform sweeps and RAGAS answer quality: [docs/EVALUATION.md](docs/EVALUATION.md).
 
 ## Quick start
 
