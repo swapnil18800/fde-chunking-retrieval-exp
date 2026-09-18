@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { api, fmt, type EvalRun } from '../lib/api'
 import { useAsync } from '../lib/hooks'
@@ -12,9 +12,12 @@ export default function Leaderboard() {
   const [sel, setSel] = useState<string | null>(null)
   const [metric, setMetric] = useState('recall@10')
   const done = (runs.data ?? []).filter((r) => r.status === 'done' && r.summary?.configs?.length)
-  const run: EvalRun | undefined = done.find((r) => r.id === sel) ?? done[0]
+  // default to the newest *retrieval* run (the matrix heatmap), else the newest run of any kind
+  const run: EvalRun | undefined = done.find((r) => r.id === sel) ?? done.find((r) => r.kind === 'retrieval') ?? done[0]
   const rows: Row[] = useMemo(() => (run?.summary?.configs ?? []) as Row[], [run])
   const cols = run?.kind === 'ragas' ? RAGAS : METRICS
+  // a ragas run has different columns than a retrieval run — keep the metric valid when switching
+  useEffect(() => { if (run && !cols.includes(metric)) setMetric(run.kind === 'ragas' ? 'factual_correctness(mode=f1)' : 'recall@10') }, [run, cols, metric])
   const sorted = [...rows].sort((a, b) => Number(b[metric] ?? 0) - Number(a[metric] ?? 0))
   const heat = useMemo(() => {
     if (run?.kind !== 'retrieval') return null
