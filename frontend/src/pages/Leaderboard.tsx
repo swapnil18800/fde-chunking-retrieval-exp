@@ -12,8 +12,9 @@ export default function Leaderboard() {
   const [sel, setSel] = useState<string | null>(null)
   const [metric, setMetric] = useState('recall@10')
   const done = (runs.data ?? []).filter((r) => r.status === 'done' && r.summary?.configs?.length)
-  // default to the newest *retrieval* run (the matrix heatmap), else the newest run of any kind
-  const run: EvalRun | undefined = done.find((r) => r.id === sel) ?? done.find((r) => r.kind === 'retrieval') ?? done[0]
+  // default to the largest retrieval run (the full matrix → heatmap), else the newest run of any kind
+  const biggest = [...done].filter((r) => r.kind === 'retrieval').sort((a, b) => (b.summary?.configs.length ?? 0) - (a.summary?.configs.length ?? 0))[0]
+  const run: EvalRun | undefined = done.find((r) => r.id === sel) ?? biggest ?? done[0]
   const rows: Row[] = useMemo(() => (run?.summary?.configs ?? []) as Row[], [run])
   const cols = run?.kind === 'ragas' ? RAGAS : METRICS
   // a ragas run has different columns than a retrieval run — keep the metric valid when switching
