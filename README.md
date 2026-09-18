@@ -79,7 +79,58 @@ Full diagram, data model and component map: [docs/ARCHITECTURE.md](docs/ARCHITEC
 
 Rerank / expansion / query-transform sweeps and RAGAS answer quality: [docs/EVALUATION.md](docs/EVALUATION.md).
 
-## Quick start
+## Run it yourself (from zero)
+
+Everything is free-tier. Budget ~1 hour, most of it unattended data building.
+
+**1. Accounts & keys (≈10 min)**
+
+| What | Where | You need |
+|---|---|---|
+| Supabase project (Postgres + pgvector) | [supabase.com](https://supabase.com) → New project → note the DB password | *Project Settings → Database → Connection string (URI, direct, port 5432)* → `DATABASE_URL` |
+| Gemini API key (free tier) | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) | `GEMINI_API_KEY` |
+| Langfuse (Hobby, free) | [cloud.langfuse.com](https://cloud.langfuse.com) → Organization → Project → *Settings → API Keys* | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` (+ `LANGFUSE_BASE_URL`: EU `https://cloud.langfuse.com`, US `https://us.cloud.langfuse.com`) |
+| Optional | DeepSeek key (paid fallback LLM), LangSmith key (alternative tracing) | `DEEPSEEK_API_KEY`, `LANGSMITH_API_KEY` — leave blank otherwise |
+
+**2. Install (≈5 min)** — needs Python via [`uv`](https://docs.astral.sh/uv/getting-started/installation/) and Node 20+
+
+```bash
+git clone https://github.com/swapnil18800/fde-chunking-retrieval-exp.git && cd fde-chunking-retrieval-exp
+uv sync                                  # Python 3.12 env + torch, sentence-transformers, spaCy model …
+cd frontend && npm install && cd ..
+cp .env.example .env                     # paste DATABASE_URL, GEMINI_API_KEY, LANGFUSE_* ; leave the rest as-is
+```
+
+In `DATABASE_URL`, URL-encode special characters in the password (`&` → `%26`, `*` → `%2A`, …) and keep `?sslmode=require`.
+
+**3. Build the database (≈45 min unattended, one command)**
+
+```bash
+uv run python db/setup_db.py  && uv run python db/ingestion/load_corpus.py  && uv run python evals/build_eval_sets.py  && uv run python db/ingestion/preprocess_nlp.py  && uv run python db/ingestion/subsample_corpus.py --target 20000 --yes  && uv run python db/ingestion/build_chunks.py --all
+```
+
+(schema → 40k passages + QA from Hugging Face → question sets → scispaCy sentences/entities →
+free-tier 20k subset → 5 chunk sets embedded locally + HNSW). Models (~600 MB) download on first use.
+On a paid Supabase plan skip the `subsample_corpus.py` step.
+
+**4. Run**
+
+```bash
+uv run uvicorn app.main:app --port 8000        # terminal 1 — API
+cd frontend && npm run dev                     # terminal 2 — UI → http://localhost:5173
+```
+
+Sanity check: `curl localhost:8000/api/health` → `{"ok": true, "passages": 20000, ...}`. Ask a question
+in **Playground**; the trace link opens in your Langfuse project.
+
+**5. (Optional) reproduce the numbers**
+
+```bash
+uv run python evals/run_retrieval_eval.py --set eval150 --matrix                       # ~1 h, no LLM
+uv run python evals/run_retrieval_eval.py --set eval150 --matrix --rerank-only ...     # see docs/HOW_TO_RUN.md
+```
+
+## Quick start (short form)
 
 ```bash
 git clone https://github.com/swapnil18800/fde-chunking-retrieval-exp.git && cd fde-chunking-retrieval-exp
