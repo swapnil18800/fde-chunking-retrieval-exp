@@ -76,6 +76,7 @@ Full diagram, data model and component map: [docs/ARCHITECTURE.md](docs/ARCHITEC
 - **Hybrid RRF is never worse than its parts**; `grep` (literal terms) trails BM25 by 9 points — the measured value of stemming + IDF; `kg` (entity co-occurrence) is weakest (0.346) but the only retriever that explains its hits.
 - Yes/no questions are easiest (0.59), list questions hardest (0.48): their 8.5 gold abstracts don't fit in top-10.
 - **MedCPT cross-encoder reranking lifts every cell** (recall@10 +0.023 avg, MRR → 0.79–0.81 across the board) and shrinks the chunking gap; best overall: `passage+bm25+rerank` **0.568 recall@10 / 0.552 precision@5 / 0.803 MRR**; best sub-abstract: `recursive_128_32+bm25+rerank` 0.515.
+- **Query transforms**: HyDE is the only one that pays, and only on whole abstracts — `passage+hybrid+hyde` 0.558 recall@10 with the **best MRR of any config (0.827)**; `multi_query` +1.4 recall / flat MRR; `decompose` (multi-hop) no gain on this single-hop benchmark. Each costs ~5 s of free-tier LLM latency.
 
 Rerank / query-transform sweeps and RAGAS answer quality: [docs/EVALUATION.md](docs/EVALUATION.md). What was hard, what we traded off (20k subset, HNSW on two sets, small local embedder, free LLM quota) and what to do next: [docs/CHALLENGES_AND_TRADEOFFS.md](docs/CHALLENGES_AND_TRADEOFFS.md).
 

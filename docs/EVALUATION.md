@@ -182,3 +182,45 @@ for every strategy, keeping 10. Raw tables: `evals/results/20260918T040455Z_eval
    ~1.9 s per question (rerank ≈ +0.5–1.2 s on Apple M4). `recursive_128_32+bm25+rerank` is the best
    sub-abstract config (0.515, MRR 0.810, ~1.0 s) and the natural pick when the generator needs
    tighter context.
+
+### 4.3 Tier 1 — LLM query transforms (`eval150_transforms`, 2026-09-18)
+
+`hybrid` retriever on `passage` and `sentence`; each transform's extra queries are RRF-fused with the
+original question (Gemini free tier, ~150 LLM calls per cell, 15–20 min each). Baselines: `passage+hybrid`
+0.533 / MRR 0.779 · `sentence+hybrid` 0.484 / MRR 0.795. Raw tables: `evals/results/20260918T051228Z_eval150_transforms/`.
+
+| config                      |   recall@5 |   recall@10 |   precision@5 |   mrr |   ndcg@10 |   hit@5 |   latency_ms |   errors |
+|:----------------------------|-----------:|------------:|--------------:|------:|----------:|--------:|-------------:|---------:|
+| passage+hybrid+hyde         |      0.454 |       0.558 |         0.544 | 0.827 |     0.65  |   0.867 |      6404.15 |        0 |
+| passage+hybrid+multi_query  |      0.434 |       0.547 |         0.523 | 0.775 |     0.62  |   0.853 |      7871.67 |        0 |
+| passage+hybrid+decompose    |      0.422 |       0.533 |         0.517 | 0.781 |     0.612 |   0.84  |      7078    |        0 |
+| sentence+hybrid+hyde        |      0.425 |       0.486 |         0.512 | 0.783 |     0.58  |   0.853 |      7149.9  |        0 |
+| sentence+hybrid+multi_query |      0.41  |       0.478 |         0.489 | 0.786 |     0.573 |   0.833 |      8631.96 |        0 |
+| sentence+hybrid+decompose   |      0.421 |       0.476 |         0.501 | 0.787 |     0.572 |   0.853 |      7225.19 |        0 |
+
+**What the transforms say**
+
+1. **HyDE is the one transform that pays — and only on whole abstracts**: `passage+hybrid+hyde` reaches
+   recall@10 0.558 (+2.5) and **MRR 0.827, the best first-hit ranking of any configuration**, including
+   the reranked ones. A hypothetical abstract is a query at the same granularity as the documents; on
+   `sentence` chunks the same draft is neutral (0.486 vs 0.484).
+2. **multi_query widens recall slightly without improving the top of the list** (+1.4 recall@10 on
+   `passage`, MRR unchanged; slightly negative on `sentence`). Paraphrases mostly re-find the same
+   abstracts.
+3. **decompose (multi-hop style) does not help average recall here** (0.533 = baseline on `passage`,
+   −0.8 on `sentence`). BioASQ questions are single-hop by construction — the gold passages each answer
+   the question independently — so splitting the question dilutes the query. The list-question subset
+   is where it could still matter; that needs a per-type read of `per_question.csv`.
+4. **Cost**: every transform adds one LLM round-trip (2–5 s on the free tier) and 2–4 extra retrievals;
+   latency goes from ~1.3 s to 6–9 s per question. Reranking (+0.5–1 s) buys a similar recall gain for a
+   fraction of the latency, but HyDE's MRR gain is unique — `hyde + rerank` is the obvious untested combo.
+
+### 4.4 Tier 1 — summary across sweeps
+
+| lever | best cell | recall@10 | MRR | Δ vs `passage+hybrid` (0.533 / 0.779) |
+|---|---|--:|--:|---|
+| chunking alone | `passage` (whole abstract) | 0.533 | 0.779 | fine chunks cost 3.6–4.9 pts |
+| retriever alone | `bm25` = `hybrid` on `passage` | 0.533 | 0.794 / 0.779 | dense −7.3 · grep −8.6 · kg −18.7 |
+| + MedCPT rerank | `passage+bm25+rerank` | **0.568** | 0.803 | +3.5 recall, +0.02 MRR, +0.5–1 s |
+| + HyDE | `passage+hybrid+hyde` | 0.558 | **0.827** | +2.5 recall, +0.05 MRR, +5 s |
+| best sub-abstract | `recursive_128_32+bm25+rerank` | 0.515 | 0.810 | tightest context for the generator |
