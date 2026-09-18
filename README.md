@@ -77,7 +77,7 @@ Full diagram, data model and component map: [docs/ARCHITECTURE.md](docs/ARCHITEC
 - Yes/no questions are easiest (0.59), list questions hardest (0.48): their 8.5 gold abstracts don't fit in top-10.
 - **MedCPT cross-encoder reranking lifts every cell** (recall@10 +0.023 avg, MRR → 0.79–0.81 across the board) and shrinks the chunking gap; best overall: `passage+bm25+rerank` **0.568 recall@10 / 0.552 precision@5 / 0.803 MRR**; best sub-abstract: `recursive_128_32+bm25+rerank` 0.515.
 
-Rerank / expansion / query-transform sweeps and RAGAS answer quality: [docs/EVALUATION.md](docs/EVALUATION.md).
+Rerank / query-transform sweeps and RAGAS answer quality: [docs/EVALUATION.md](docs/EVALUATION.md). What was hard, what we traded off (20k subset, HNSW on two sets, small local embedder, free LLM quota) and what to do next: [docs/CHALLENGES_AND_TRADEOFFS.md](docs/CHALLENGES_AND_TRADEOFFS.md).
 
 ## Run it yourself (from zero)
 
@@ -160,6 +160,7 @@ uv run python evals/run_ragas_eval.py --set eval150 --limit 50 --configs sentenc
 | [RETRIEVAL.md](docs/RETRIEVAL.md) | The five retrievers + transforms / rerank / expansion, multi-hop |
 | [EVALUATION.md](docs/EVALUATION.md) | Metrics, methodology, results history |
 | [TRACING.md](docs/TRACING.md) | Langfuse structure, LangSmith validation, logs, how to read a question's story |
+| [CHALLENGES_AND_TRADEOFFS.md](docs/CHALLENGES_AND_TRADEOFFS.md) | What broke (free-tier storage/quota, sleep-killed evals, dependency rot), the trade-offs chosen, and the ranked list of next improvements |
 | [HOW_TO_RUN.md](docs/HOW_TO_RUN.md) | Setup, data build, run, evaluate, troubleshooting |
 | [DIRECTORY_STRUCTURE.md](docs/DIRECTORY_STRUCTURE.md) | File-level map |
 | [CLAUDE.md](CLAUDE.md) + [.claude/skills/](.claude/skills) | Working rules and runbooks for Claude Code (navigate, debug a question, run experiments, add strategy, tracing) |
