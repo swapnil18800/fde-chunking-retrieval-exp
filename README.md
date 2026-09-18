@@ -75,6 +75,7 @@ Full diagram, data model and component map: [docs/ARCHITECTURE.md](docs/ARCHITEC
 - **Chunk length flips the winner between lexical and dense**: BM25 wins on whole abstracts (0.533 vs 0.460), dense wins on single sentences (0.471 vs 0.446). Entity-heavy medical questions favour exact tokens against long text; a small 384-d embedder represents one sentence better than one abstract.
 - **Hybrid RRF is never worse than its parts**; `grep` (literal terms) trails BM25 by 9 points — the measured value of stemming + IDF; `kg` (entity co-occurrence) is weakest (0.346) but the only retriever that explains its hits.
 - Yes/no questions are easiest (0.59), list questions hardest (0.48): their 8.5 gold abstracts don't fit in top-10.
+- **MedCPT cross-encoder reranking lifts every cell** (recall@10 +0.023 avg, MRR → 0.79–0.81 across the board) and shrinks the chunking gap; best overall: `passage+bm25+rerank` **0.568 recall@10 / 0.552 precision@5 / 0.803 MRR**; best sub-abstract: `recursive_128_32+bm25+rerank` 0.515.
 
 Rerank / expansion / query-transform sweeps and RAGAS answer quality: [docs/EVALUATION.md](docs/EVALUATION.md).
 

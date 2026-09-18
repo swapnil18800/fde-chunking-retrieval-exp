@@ -144,3 +144,41 @@ raw tables: `evals/results/20260918T024231Z_eval150_matrix/`
    best config) — list answers spread over 8.5 gold abstracts and top-10 cannot hold them all. This
    is where `decompose` (multi-hop) and larger k should help (see 4.4).
 
+### 4.2 Tier 1 — cross-encoder reranking (`eval150_rerank`, 2026-09-18)
+
+Same 150 questions; `ncbi/MedCPT-Cross-Encoder` rescored the top-30 candidates of bm25 / dense / hybrid
+for every strategy, keeping 10. Raw tables: `evals/results/20260918T040455Z_eval150_rerank/`.
+
+| config | recall@10 base | recall@10 +rerank | Δ | precision@5 base | +rerank | mrr base | +rerank | ndcg@10 | latency ms |
+|:--|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| passage+bm25+rerank | 0.533 | 0.568 | +0.035 | 0.513 | 0.552 | 0.794 | 0.803 | 0.661 | 1861 |
+| passage+hybrid+rerank | 0.533 | 0.562 | +0.029 | 0.527 | 0.555 | 0.779 | 0.798 | 0.656 | 2565 |
+| semantic+bm25+rerank | 0.479 | 0.516 | +0.037 | 0.479 | 0.525 | 0.772 | 0.802 | 0.613 | 1163 |
+| recursive_128_32+bm25+rerank | 0.478 | 0.515 | +0.037 | 0.487 | 0.535 | 0.761 | 0.810 | 0.614 | 1012 |
+| fixed_128_32+hybrid+rerank | 0.497 | 0.515 | +0.017 | 0.528 | 0.543 | 0.791 | 0.803 | 0.611 | 1914 |
+| semantic+hybrid+rerank | 0.495 | 0.511 | +0.016 | 0.519 | 0.525 | 0.781 | 0.791 | 0.608 | 1950 |
+| recursive_128_32+hybrid+rerank | 0.497 | 0.509 | +0.012 | 0.517 | 0.543 | 0.774 | 0.807 | 0.608 | 1831 |
+| fixed_128_32+bm25+rerank | 0.485 | 0.507 | +0.022 | 0.505 | 0.541 | 0.760 | 0.806 | 0.610 | 965 |
+| passage+dense+rerank | 0.460 | 0.500 | +0.040 | 0.472 | 0.517 | 0.728 | 0.750 | 0.593 | 2574 |
+| sentence+hybrid+rerank | 0.484 | 0.489 | +0.005 | 0.489 | 0.511 | 0.795 | 0.808 | 0.592 | 1916 |
+| sentence+dense+rerank | 0.471 | 0.489 | +0.017 | 0.497 | 0.508 | 0.781 | 0.798 | 0.591 | 2203 |
+| semantic+dense+rerank | 0.468 | 0.485 | +0.017 | 0.500 | 0.508 | 0.766 | 0.786 | 0.587 | 2178 |
+| sentence+bm25+rerank | 0.446 | 0.476 | +0.030 | 0.425 | 0.491 | 0.742 | 0.803 | 0.580 | 793 |
+| fixed_128_32+dense+rerank | 0.453 | 0.469 | +0.016 | 0.488 | 0.524 | 0.764 | 0.779 | 0.572 | 1860 |
+| recursive_128_32+dense+rerank | 0.449 | 0.457 | +0.008 | 0.492 | 0.508 | 0.753 | 0.771 | 0.559 | 1827 |
+
+**What reranking does**
+
+1. **Consistent lift everywhere**: recall@10 +0.023 on average (min +0.005, max +0.040),
+   precision@5 +0.030, MRR +0.025. No configuration got worse.
+2. **The gap between chunking strategies shrinks.** Without rerank the fine strategies trailed `passage`
+   by 3.6–4.9 points (hybrid); with rerank `semantic`/`recursive`/`fixed` sit at 0.51–0.52 vs `passage`
+   0.56–0.57. MRR converges to 0.79–0.81 for almost every cell — the cross-encoder, which reads the
+   query and the chunk together, largely undoes first-stage ranking differences.
+3. **Dense gains the most in relative terms** (`passage+dense` 0.460 → 0.500, `sentence+dense` 0.471 →
+   0.489) but bm25-fed candidates still win: the reranker can only reorder what the first stage
+   surfaces, and BM25 surfaces more gold abstracts in its top-30 on this entity-heavy corpus.
+4. **Best overall cell: `passage+bm25+rerank` — recall@10 0.568, precision@5 0.552, MRR 0.803**, at
+   ~1.9 s per question (rerank ≈ +0.5–1.2 s on Apple M4). `recursive_128_32+bm25+rerank` is the best
+   sub-abstract config (0.515, MRR 0.810, ~1.0 s) and the natural pick when the generator needs
+   tighter context.
