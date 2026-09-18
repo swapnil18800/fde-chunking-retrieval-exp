@@ -22,7 +22,8 @@ export default function Leaderboard() {
     const strategies = [...new Set(base.map((r) => String(r.strategy)))]
     const retrievers = [...new Set(base.map((r) => String(r.retriever)))]
     if (strategies.length < 2 || retrievers.length < 2) return null
-    return { strategies, retrievers, at: (s: string, r: string) => base.find((x) => x.strategy === s && x.retriever === r)?.[metric] as number | undefined }
+    const vals = base.map((x) => Number(x[metric])).filter((v) => !Number.isNaN(v))
+    return { strategies, retrievers, min: Math.min(...vals), max: Math.max(...vals), at: (s: string, r: string) => base.find((x) => x.strategy === s && x.retriever === r)?.[metric] as number | undefined }
   }, [rows, metric, run])
 
   if (runs.loading) return <div className="text-sm text-slate-500">loading eval runs…</div>
@@ -40,13 +41,13 @@ export default function Leaderboard() {
 
       {heat && (
         <div className="card overflow-x-auto p-5">
-          <div className="label mb-3">{metric} — chunking × retriever (no transform / rerank / expansion)</div>
+          <div className="label mb-3">{metric} — chunking × retriever (no transform / rerank / expansion) · colour scale {fmt(heat.min, 3)} → {fmt(heat.max, 3)}</div>
           <table className="text-sm">
             <thead><tr><th className="p-2 text-left text-xs text-slate-500">chunking \ retriever</th>{heat.retrievers.map((r) => <th key={r} className="p-2 font-mono text-xs">{r}</th>)}</tr></thead>
             <tbody>
               {heat.strategies.map((s) => (
                 <tr key={s}><td className="p-2 font-mono text-xs">{s}</td>
-                  {heat.retrievers.map((r) => { const v = heat.at(s, r); return <td key={r} className="p-1"><Cell v={v} max={metric === 'latency_ms' ? Math.max(...rows.map((x) => Number(x.latency_ms) || 0)) : 1} invert={metric === 'latency_ms'} /></td> })}
+                  {heat.retrievers.map((r) => { const v = heat.at(s, r); return <td key={r} className="p-1"><Cell v={v} min={heat.min} max={heat.max} invert={metric === 'latency_ms'} /></td> })}
                 </tr>
               ))}
             </tbody>
@@ -60,7 +61,7 @@ export default function Leaderboard() {
           <BarChart data={sorted.map((r) => ({ name: String(r.config), v: Number(r[metric]) }))} layout="vertical" margin={{ left: 10, right: 30 }}>
             <CartesianGrid strokeDasharray="3 3" horizontal={false} />
             <XAxis type="number" domain={metric === 'latency_ms' ? [0, 'auto'] : [0, 1]} tick={{ fontSize: 11 }} />
-            <YAxis type="category" dataKey="name" width={280} tick={{ fontSize: 11, fontFamily: 'JetBrains Mono' }} />
+            <YAxis type="category" dataKey="name" width={280} interval={0} tick={{ fontSize: 11, fontFamily: 'JetBrains Mono' }} />
             <Tooltip formatter={(v) => fmt(Number(v), 3)} />
             <Bar dataKey="v" fill="#0e7490" radius={[0, 4, 4, 0]} />
           </BarChart>
@@ -82,9 +83,10 @@ export default function Leaderboard() {
   )
 }
 
-function Cell({ v, max, invert }: { v?: number; max: number; invert: boolean }) {
+/** Colour scale is relative to the visible cells (min→max) so small differences stay readable. */
+function Cell({ v, min, max, invert }: { v?: number; min: number; max: number; invert: boolean }) {
   if (v == null) return <div className="h-9 w-20 rounded bg-slate-50" />
-  const t = Math.min(1, Math.max(0, v / max))
+  const t = max > min ? Math.min(1, Math.max(0, (v - min) / (max - min))) : 0.5
   const a = (invert ? 1 - t : t) * 0.9 + 0.05
   return <div className="grid h-9 w-20 place-items-center rounded text-xs font-semibold tabular-nums" style={{ background: `rgba(14,116,144,${a})`, color: a > 0.5 ? 'white' : '#0f172a' }}>{invert ? Math.round(v) : v.toFixed(3)}</div>
 }
